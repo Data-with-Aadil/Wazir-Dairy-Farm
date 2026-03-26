@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
+import { useFocusEffect } from 'expo-router';
 import { format } from 'date-fns';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
@@ -37,16 +38,22 @@ export default function WRXScreen() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const scrollViewRef = useRef<ScrollView>(null);
+
+  // Auto-fetch when tab is focused
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchNotifications();
+    }, [])
+  );
 
   useEffect(() => {
     fetchNotifications();
-    // Poll for new notifications every 30 seconds
     const interval = setInterval(fetchNotifications, 30000);
     return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
-    // Calculate unread count
     const unread = notifications.filter(
       (notif) => !notif.read_by.includes(user?.name || '')
     ).length;
@@ -61,7 +68,12 @@ export default function WRXScreen() {
         // Reverse array so latest is at bottom
         setNotifications(data.reverse());
         
-        // Auto-mark as read when viewing
+        // Auto-scroll to bottom after data loads
+        setTimeout(() => {
+          scrollViewRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+        
+        // Auto-mark as read
         const unreadIds = data
           .filter((n: Notification) => !n.read_by.includes(user?.name || ''))
           .map((n: Notification) => n._id);
@@ -103,7 +115,6 @@ export default function WRXScreen() {
       });
 
       if (response.ok) {
-        // Refresh notifications to show new reaction
         fetchNotifications();
       }
     } catch (error) {
@@ -137,41 +148,28 @@ export default function WRXScreen() {
 
   const getTypeIcon = (type: string) => {
     switch (type) {
-      case 'investment':
-        return 'trending-up';
-      case 'expenditure':
-        return 'cash';
-      case 'milk_sale':
-        return 'water';
-      case 'dls':
-        return 'lock-closed';
-      case 'deletion':
-        return 'trash';
-      default:
-        return 'information-circle';
+      case 'investment': return 'trending-up';
+      case 'expenditure': return 'cash';
+      case 'milk_sale': return 'water';
+      case 'dls': return 'lock-closed';
+      case 'deletion': return 'trash';
+      default: return 'information-circle';
     }
   };
 
   const getTypeColor = (type: string) => {
     switch (type) {
-      case 'investment':
-        return '#3B82F6';
-      case 'expenditure':
-        return '#EF4444';
-      case 'milk_sale':
-        return '#10B981';
-      case 'dls':
-        return '#8B5CF6';
-      case 'deletion':
-        return '#F59E0B';
-      default:
-        return '#6B7280';
+      case 'investment': return '#3B82F6';
+      case 'expenditure': return '#EF4444';
+      case 'milk_sale': return '#10B981';
+      case 'dls': return '#8B5CF6';
+      case 'deletion': return '#F59E0B';
+      default: return '#6B7280';
     }
   };
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>WRX</Text>
@@ -184,12 +182,13 @@ export default function WRXScreen() {
         )}
       </View>
 
-      {/* Notifications List */}
       <ScrollView
+        ref={scrollViewRef}
         style={styles.content}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#10B981" />
         }
+        onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
       >
         {notifications.length === 0 ? (
           <View style={styles.emptyState}>
@@ -210,7 +209,6 @@ export default function WRXScreen() {
                   isUnread && styles.notificationUnread,
                 ]}
               >
-                {/* Icon and Message */}
                 <View style={styles.notificationHeader}>
                   <View
                     style={[
@@ -231,7 +229,6 @@ export default function WRXScreen() {
                   {isUnread && <View style={styles.unreadDot} />}
                 </View>
 
-                {/* Reactions */}
                 <View style={styles.reactionsContainer}>
                   <Text style={styles.reactionsLabel}>Quick Reply:</Text>
                   <View style={styles.reactionButtons}>
@@ -250,7 +247,6 @@ export default function WRXScreen() {
                   </View>
                 </View>
 
-                {/* Show all reactions */}
                 {Object.keys(notif.reactions || {}).length > 0 && (
                   <View style={styles.allReactions}>
                     {Object.entries(notif.reactions || {}).map(([userName, emoji]) => (
@@ -273,10 +269,7 @@ export default function WRXScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F9FAFB',
-  },
+  container: { flex: 1, backgroundColor: '#F9FAFB' },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -288,47 +281,14 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1F2937',
-  },
-  subtitle: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginTop: 2,
-  },
-  unreadBadge: {
-    backgroundColor: '#10B981',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-  },
-  unreadText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  content: {
-    flex: 1,
-    padding: 16,
-  },
-  emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 100,
-  },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#6B7280',
-    marginTop: 16,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#9CA3AF',
-    marginTop: 8,
-  },
+  title: { fontSize: 24, fontWeight: 'bold', color: '#1F2937' },
+  subtitle: { fontSize: 12, color: '#6B7280', marginTop: 2 },
+  unreadBadge: { backgroundColor: '#10B981', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
+  unreadText: { color: '#fff', fontSize: 12, fontWeight: '600' },
+  content: { flex: 1, padding: 16 },
+  emptyState: { alignItems: 'center', justifyContent: 'center', paddingTop: 100 },
+  emptyText: { fontSize: 18, fontWeight: '600', color: '#6B7280', marginTop: 16 },
+  emptySubtext: { fontSize: 14, color: '#9CA3AF', marginTop: 8 },
   notificationCard: {
     backgroundColor: '#fff',
     borderRadius: 12,
@@ -340,59 +300,16 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 2,
   },
-  notificationUnread: {
-    borderLeftWidth: 4,
-    borderLeftColor: '#10B981',
-  },
-  notificationHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  iconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  messageContainer: {
-    flex: 1,
-  },
-  message: {
-    fontSize: 14,
-    color: '#1F2937',
-    lineHeight: 20,
-    marginBottom: 4,
-  },
-  time: {
-    fontSize: 11,
-    color: '#9CA3AF',
-  },
-  unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#10B981',
-    marginLeft: 8,
-    marginTop: 6,
-  },
-  reactionsContainer: {
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-    paddingTop: 12,
-  },
-  reactionsLabel: {
-    fontSize: 11,
-    color: '#6B7280',
-    marginBottom: 8,
-    fontWeight: '600',
-  },
-  reactionButtons: {
-    flexDirection: 'row',
-    gap: 8,
-  },
+  notificationUnread: { borderLeftWidth: 4, borderLeftColor: '#10B981' },
+  notificationHeader: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 12 },
+  iconCircle: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  messageContainer: { flex: 1 },
+  message: { fontSize: 14, color: '#1F2937', lineHeight: 20, marginBottom: 4 },
+  time: { fontSize: 11, color: '#9CA3AF' },
+  unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981', marginLeft: 8, marginTop: 6 },
+  reactionsContainer: { borderTopWidth: 1, borderTopColor: '#F3F4F6', paddingTop: 12 },
+  reactionsLabel: { fontSize: 11, color: '#6B7280', marginBottom: 8, fontWeight: '600' },
+  reactionButtons: { flexDirection: 'row', gap: 8 },
   reactionButton: {
     backgroundColor: '#F9FAFB',
     borderRadius: 8,
@@ -401,28 +318,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
-  reactionButtonActive: {
-    backgroundColor: '#F0FDF4',
-    borderColor: '#10B981',
-  },
-  reactionEmoji: {
-    fontSize: 18,
-  },
-  allReactions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 12,
-  },
-  reactionChip: {
-    backgroundColor: '#F0FDF4',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  reactionChipText: {
-    fontSize: 12,
-    color: '#059669',
-    fontWeight: '500',
-  },
+  reactionButtonActive: { backgroundColor: '#F0FDF4', borderColor: '#10B981' },
+  reactionEmoji: { fontSize: 18 },
+  allReactions: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 },
+  reactionChip: { backgroundColor: '#F0FDF4', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  reactionChipText: { fontSize: 12, color: '#059669', fontWeight: '500' },
 });
