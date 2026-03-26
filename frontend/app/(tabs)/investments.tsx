@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
 import { useAuth } from '../../context/AuthContext';
 
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+const BACKEND_URL = "https://wazir-dairy-farm.onrender.com";
 
 const CATEGORIES = [
   'Shed / Infrastructure',
