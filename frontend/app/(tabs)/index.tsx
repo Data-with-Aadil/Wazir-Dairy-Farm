@@ -21,7 +21,7 @@ import { router, useFocusEffect } from 'expo-router';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 
-const BACKGROUND_IMAGE = require('../assets/0vjmy7gj_1000044672.jpg');
+const BACKGROUND_IMAGE = require('../assets/images/0vjmy7gj_1000044672.jpg');
 const BACKEND_URL = "https://wazir-dairy-farm.onrender.com";
 
 interface DashboardStats {
