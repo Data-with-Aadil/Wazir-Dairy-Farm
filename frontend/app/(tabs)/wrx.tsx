@@ -58,7 +58,8 @@ export default function WRXScreen() {
       const response = await fetch(`${BACKEND_URL}/api/notifications`);
       if (response.ok) {
         const data = await response.json();
-        setNotifications(data);
+        // Reverse array so latest is at bottom
+        setNotifications(data.reverse());
         
         // Auto-mark as read when viewing
         const unreadIds = data
@@ -70,9 +71,7 @@ export default function WRXScreen() {
         }
       }
     } catch (error) {
-      console.error('Error fetching notifications:', error);
-    }
-  };
+      console.error('Error fetching notifications:', error);\n    }\n  };
 
   const markAsRead = async (notificationIds: string[]) => {
     try {
