@@ -13,7 +13,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useFocusEffect } from 'expo-router';
 import { format } from 'date-fns';
 
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+const BACKEND_URL = "https://wazir-dairy-farm.onrender.com";
 
 const QUICK_REACTIONS = [
   { emoji: '👍', label: 'Okay' },
