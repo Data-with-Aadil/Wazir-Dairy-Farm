@@ -71,7 +71,9 @@ export default function WRXScreen() {
         }
       }
     } catch (error) {
-      console.error('Error fetching notifications:', error);\n    }\n  };
+      console.error('Error fetching notifications:', error);
+    }
+  };
 
   const markAsRead = async (notificationIds: string[]) => {
     try {
