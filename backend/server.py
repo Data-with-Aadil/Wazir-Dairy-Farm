@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from bson import ObjectId
+import httpx
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -27,6 +28,34 @@ def serialize_doc(doc):
     if doc and "_id" in doc:
         doc["_id"] = str(doc["_id"])
     return doc
+
+# Helper to send push notifications
+async def send_push_notification(from_user: str, title: str, body: str):
+    """Send push notification to the other partner"""
+    try:
+        other_user = "Imran" if from_user == "Aadil" else "Aadil"
+        user_doc = await db.users.find_one({"name": other_user})
+        
+        if not user_doc or not user_doc.get("expo_push_token"):
+            return
+        
+        push_token = user_doc["expo_push_token"]
+        
+        async with httpx.AsyncClient() as client_http:
+            await client_http.post(
+                'https://exp.host/--/api/v2/push/send',
+                json={
+                    "to": push_token,
+                    "title": title,
+                    "body": body,
+                    "data": {"screen": "wrx"},
+                    "sound": "default",
+                    "priority": "high",
+                },
+                headers={"Content-Type": "application/json"}
+            )
+    except Exception as e:
+        logging.error(f"Error sending push notification: {e}")
 
 # ==================== MODELS ====================
 
@@ -140,7 +169,30 @@ async def create_investment(investment: Investment):
         message=f"{investment.investor} added Investment - {investment.category} - ₹{investment.amount:,.0f} on {investment.date}"
     )
     await db.notifications.insert_one(notif.dict())
+    
+    # Send push notification to other user
+    await send_push_notification(
+        investment.investor,
+        "New Investment Added",
+        f"{investment.investor} added Investment - {investment.category} - ₹{investment.amount:,.0f}"
+    )
+    
     return {"success": True, "id": str(result.inserted_id)}
+
+@api_router.put("/investments/{investment_id}")
+async def update_investment(investment_id: str, investment: Investment):
+    await db.investments.update_one(
+        {"_id": ObjectId(investment_id)},
+        {"$set": investment.dict()}
+    )
+    # Create notification
+    notif = Notification(
+        type="investment",
+        data=investment.dict(),
+        message=f"{investment.investor} updated Investment - {investment.category} - ₹{investment.amount:,.0f} on {investment.date}"
+    )
+    await db.notifications.insert_one(notif.dict())
+    return {"success": True}
 
 @api_router.get("/investments")
 async def get_investments(deleted: bool = False):
