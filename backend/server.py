@@ -349,6 +349,31 @@ async def get_dashboard_stats():
 async def root():
     return {"message": "Wazir Dairy Farming API"}
 
+# Cleanup test data
+@api_router.delete("/test/cleanup")
+async def cleanup_test_data():
+    """Remove all test data from database"""
+    try:
+        # Delete all entries
+        await db.investments.delete_many({})
+        await db.expenditures.delete_many({})
+        await db.milk_sales.delete_many({})
+        await db.dairy_lock_sales.delete_many({})
+        await db.notifications.delete_many({})
+        
+        return {
+            "message": "All test data cleaned up successfully",
+            "deleted": {
+                "investments": "all",
+                "expenditures": "all",
+                "milk_sales": "all",
+                "dairy_lock_sales": "all",
+                "notifications": "all"
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Include router
 app.include_router(api_router)
 
