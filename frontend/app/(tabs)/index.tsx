@@ -548,8 +548,126 @@ export default function DashboardScreen() {
             </View>
           )}
 
+          {/* Event Calendar */}
+          <View style={styles.card}>
+            <View style={styles.calendarHeader}>
+              <Text style={styles.cardTitle}>Event Calendar</Text>
+              <TouchableOpacity
+                onPress={() => setEventModalVisible(true)}
+                style={styles.addEventButton}
+              >
+                <Ionicons name="add" size={24} color="#fff" />
+              </TouchableOpacity>
+            </View>
+
+            <Calendar
+              markedDates={{
+                ...events.reduce((acc: any, event: any) => {
+                  acc[event.date] = {
+                    marked: true,
+                    dotColor: '#10B981',
+                    customStyles: {
+                      container: {
+                        backgroundColor: '#F0FDF4',
+                      },
+                    },
+                  };
+                  return acc;
+                }, {}),
+                [selectedDate]: {
+                  selected: true,
+                  selectedColor: '#10B981',
+                },
+              }}
+              onDayPress={(day: any) => {
+                setSelectedDate(day.dateString);
+                setEventModalVisible(true);
+              }}
+              theme={{
+                selectedDayBackgroundColor: '#10B981',
+                todayTextColor: '#10B981',
+                arrowColor: '#10B981',
+              }}
+            />
+
+            {/* Event List */}
+            <View style={styles.eventList}>
+              {events.map((event: any) => (
+                <View key={event._id} style={styles.eventItem}>
+                  <View style={styles.eventDot} />
+                  <View style={styles.eventContent}>
+                    <Text style={styles.eventDate}>{event.date}</Text>
+                    <Text style={styles.eventDesc}>{event.description}</Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={async () => {
+                      try {
+                        await fetch(`${BACKEND_URL}/api/events/${event._id}`, {
+                          method: 'DELETE',
+                        });
+                        fetchEvents();
+                      } catch (error) {
+                        Alert.alert('Error', 'Failed to delete event');
+                      }
+                    }}
+                  >
+                    <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          </View>
+
           <View style={{ height: 40 }} />
         </ScrollView>
+
+        {/* Event Add Modal */}
+        <Modal
+          visible={eventModalVisible}
+          animationType="slide"
+          transparent
+          onRequestClose={() => setEventModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.eventModalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Add Event</Text>
+                <TouchableOpacity onPress={() => setEventModalVisible(false)}>
+                  <Ionicons name="close" size={24} color="#6B7280" />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Date: {selectedDate || 'Select a date'}</Text>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>
+                  Event Description ({eventDescription.length}/15)
+                </Text>
+                <TextInput
+                  style={styles.input}
+                  value={eventDescription}
+                  onChangeText={(text) => setEventDescription(text.substring(0, 15))}
+                  placeholder="e.g., Deworming"
+                  maxLength={15}
+                />
+              </View>
+
+              <TouchableOpacity
+                style={[styles.submitButton, addingEvent && styles.submitButtonDisabled]}
+                onPress={handleAddEvent}
+                disabled={addingEvent}
+              >
+                {addingEvent ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.submitButtonText}>Add Event</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
       </View>
     </ImageBackground>
   );
@@ -732,5 +850,115 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#1F2937',
+  },
+  dlsValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#10B981',
+  },
+  dlsNetProfit: {
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  addEventButton: {
+    backgroundColor: '#10B981',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  eventList: {
+    marginTop: 16,
+  },
+  eventItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  eventDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#10B981',
+    marginRight: 12,
+  },
+  eventContent: {
+    flex: 1,
+  },
+  eventDate: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginBottom: 2,
+  },
+  eventDesc: {
+    fontSize: 14,
+    color: '#1F2937',
+    fontWeight: '500',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  eventModalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    maxHeight: '60%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1F2937',
+  },
+  formGroup: {
+    marginBottom: 16,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  input: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    color: '#1F2937',
+  },
+  submitButton: {
+    backgroundColor: '#10B981',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  submitButtonDisabled: {
+    backgroundColor: '#9CA3AF',
+  },
+  submitButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

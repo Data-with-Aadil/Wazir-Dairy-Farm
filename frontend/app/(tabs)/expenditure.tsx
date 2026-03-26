@@ -56,6 +56,7 @@ interface Expenditure {
   paid_by: string;
   category: string;
   subcategory: string;
+  notes?: string;
 }
 
 export default function ExpenditureScreen() {
@@ -71,6 +72,7 @@ export default function ExpenditureScreen() {
   const [paidBy, setPaidBy] = useState(user?.name || 'Aadil');
   const [category, setCategory] = useState('Supplements');
   const [subcategory, setSubcategory] = useState('Mineral Mixture');
+  const [notes, setNotes] = useState('');
 
   useEffect(() => {
     fetchExpenditures();
@@ -117,6 +119,7 @@ export default function ExpenditureScreen() {
           paid_by: paidBy,
           category,
           subcategory,
+          notes: notes.trim() || undefined,
         }),
       });
 
