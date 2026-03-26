@@ -78,6 +78,7 @@ class Investment(BaseModel):
     date: str
     investor: str
     category: str
+    notes: Optional[str] = None
     deleted: bool = False
     created_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
 
@@ -87,6 +88,7 @@ class Expenditure(BaseModel):
     paid_by: str
     category: str
     subcategory: str
+    notes: Optional[str] = None
     deleted: bool = False
     created_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
 
@@ -114,6 +116,13 @@ class Notification(BaseModel):
     message: str
     read_by: List[str] = []
     reactions: Dict[str, str] = {}  # {user: emoji}
+    created_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
+
+class CalendarEvent(BaseModel):
+    date: str  # YYYY-MM-DD format
+    description: str  # max 15 chars
+    created_by: str
+    deleted: bool = False
     created_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
 
 class ReactionUpdate(BaseModel):
@@ -395,6 +404,30 @@ async def get_dashboard_stats():
         "net_profit": total_earnings - total_expenditure,
         "total_dls": total_dls
     }
+
+# ==================== CALENDAR EVENT ENDPOINTS ====================
+
+@api_router.post("/events")
+async def create_event(event: CalendarEvent):
+    # Limit description to 15 chars
+    if len(event.description) > 15:
+        event.description = event.description[:15]
+    
+    result = await db.events.insert_one(event.dict())
+    return {"success": True, "id": str(result.inserted_id)}
+
+@api_router.get("/events")
+async def get_events(deleted: bool = False):
+    events = await db.events.find({"deleted": deleted}).sort("date", 1).to_list(1000)
+    return [serialize_doc(event) for event in events]
+
+@api_router.delete("/events/{event_id}")
+async def delete_event(event_id: str):
+    await db.events.update_one(
+        {"_id": ObjectId(event_id)},
+        {"$set": {"deleted": True}}
+    )
+    return {"success": True}
 
 # Health check
 @api_router.get("/")
