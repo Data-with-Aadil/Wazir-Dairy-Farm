@@ -316,7 +316,7 @@ export default function DashboardScreen() {
   // Prepare line chart data
   const getLineChartData = () => {
     const monthlyData: { [key: string]: { earnings: number; expenditure: number } } = {};
-
+  
     milkSales.forEach((sale) => {
       const month = sale.date.substring(0, 7);
       if (!monthlyData[month]) {
@@ -324,7 +324,7 @@ export default function DashboardScreen() {
       }
       monthlyData[month].earnings += sale.earnings;
     });
-
+  
     expenditures.forEach((exp) => {
       const month = exp.date.substring(0, 7);
       if (!monthlyData[month]) {
@@ -332,20 +332,19 @@ export default function DashboardScreen() {
       }
       monthlyData[month].expenditure += exp.amount;
     });
-
+  
     const sortedMonths = Object.keys(monthlyData).sort();
     const recent = sortedMonths.slice(-6);
-
+  
     const earningsData = recent.map((month) => ({
-      value: Math.round(monthlyData[month].earnings / 1000), // Round to whole number (thousands)
+      value: monthlyData[month].earnings, // ❌ NO /1000
       label: month.substring(5),
-      dataPointText: `${Math.round(monthlyData[month].earnings / 1000)}k`,
     }));
-
+  
     const expenditureData = recent.map((month) => ({
-      value: Math.round(monthlyData[month].expenditure / 1000), // Round to whole number
+      value: monthlyData[month].expenditure, // ❌ NO /1000
     }));
-
+  
     return { earningsData, expenditureData };
   };
 
@@ -495,6 +494,7 @@ export default function DashboardScreen() {
                   hideRules
                   yAxisColor="#E5E7EB"
                   xAxisColor="#E5E7EB"
+                  yAxisLabelSuffix="k"
                   yAxisTextStyle={{ color: '#9CA3AF', fontSize: 10 }}
                   xAxisLabelTextStyle={{ color: '#6B7280', fontSize: 10 }}
                   curved
