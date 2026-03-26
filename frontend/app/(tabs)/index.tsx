@@ -8,8 +8,10 @@ import {
   RefreshControl,
   ImageBackground,
   Alert,
+  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LineChart, PieChart } from 'react-native-gifted-charts';
 import { useAuth } from '../../context/AuthContext';
 import { router } from 'expo-router';
 
@@ -26,14 +28,30 @@ interface DashboardStats {
   total_dls: number;
 }
 
+interface MilkSale {
+  date: string;
+  earnings: number;
+}
+
+interface Expenditure {
+  date: string;
+  amount: number;
+}
+
+const screenWidth = Dimensions.get('window').width;
+
 export default function DashboardScreen() {
   const { user, logout } = useAuth();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [milkSales, setMilkSales] = useState<MilkSale[]>([]);
+  const [expenditures, setExpenditures] = useState<Expenditure[]>([]);
+  const [chartFilter, setChartFilter] = useState('3months');
 
   useEffect(() => {
     fetchStats();
-    setupUsers(); // Initialize users on first load
+    fetchChartData();
+    setupUsers();
   }, []);
 
   const setupUsers = async () => {
@@ -56,9 +74,30 @@ export default function DashboardScreen() {
     }
   };
 
+  const fetchChartData = async () => {
+    try {
+      const [salesRes, expendRes] = await Promise.all([
+        fetch(`${BACKEND_URL}/api/milk-sales`),
+        fetch(`${BACKEND_URL}/api/expenditures`),
+      ]);
+
+      if (salesRes.ok) {
+        const salesData = await salesRes.json();
+        setMilkSales(salesData);
+      }
+
+      if (expendRes.ok) {
+        const expendData = await expendRes.json();
+        setExpenditures(expendData);
+      }
+    } catch (error) {
+      console.error('Error fetching chart data:', error);
+    }
+  };
+
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchStats();
+    await Promise.all([fetchStats(), fetchChartData()]);
     setRefreshing(false);
   };
 
@@ -75,6 +114,67 @@ export default function DashboardScreen() {
       },
     ]);
   };
+
+  // Prepare line chart data
+  const getLineChartData = () => {
+    // Group by month
+    const monthlyData: { [key: string]: { earnings: number; expenditure: number } } = {};
+
+    milkSales.forEach((sale) => {
+      const month = sale.date.substring(0, 7); // YYYY-MM
+      if (!monthlyData[month]) {
+        monthlyData[month] = { earnings: 0, expenditure: 0 };
+      }
+      monthlyData[month].earnings += sale.earnings;
+    });
+
+    expenditures.forEach((exp) => {
+      const month = exp.date.substring(0, 7);
+      if (!monthlyData[month]) {
+        monthlyData[month] = { earnings: 0, expenditure: 0 };
+      }
+      monthlyData[month].expenditure += exp.amount;
+    });
+
+    // Convert to array and sort
+    const sortedMonths = Object.keys(monthlyData).sort();
+    const recent = sortedMonths.slice(-6); // Last 6 months
+
+    const earningsData = recent.map((month, index) => ({
+      value: monthlyData[month].earnings / 1000, // Convert to thousands
+      label: month.substring(5), // MM
+      dataPointText: `${(monthlyData[month].earnings / 1000).toFixed(1)}k`,
+    }));
+
+    const expenditureData = recent.map((month) => ({
+      value: monthlyData[month].expenditure / 1000,
+    }));
+
+    return { earningsData, expenditureData };
+  };
+
+  // Prepare pie chart data
+  const getPieChartData = () => {
+    if (!stats) return [];
+
+    return [
+      {
+        value: stats.aadil_investment,
+        color: '#10B981',
+        text: `${((stats.aadil_investment / stats.total_investment) * 100).toFixed(0)}%`,
+        label: 'Aadil',
+      },
+      {
+        value: stats.imran_investment,
+        color: '#3B82F6',
+        text: `${((stats.imran_investment / stats.total_investment) * 100).toFixed(0)}%`,
+        label: 'Imran',
+      },
+    ];
+  };
+
+  const { earningsData, expenditureData } = getLineChartData();
+  const pieData = getPieChartData();
 
   return (
     <ImageBackground
@@ -148,16 +248,91 @@ export default function DashboardScreen() {
             <Text style={styles.cardSubtitle}>Total Actual Payments Received</Text>
           </View>
 
-          {/* Charts Placeholder */}
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Earnings vs Expenditure</Text>
-            <Text style={styles.chartPlaceholder}>Chart will be added in next phase</Text>
-          </View>
+          {/* Earnings vs Expenditure Chart */}
+          {earningsData.length > 0 && (
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Earnings vs Expenditure (Last 6 Months)</Text>
+              <View style={styles.chartContainer}>
+                <LineChart
+                  data={earningsData}
+                  data2={expenditureData}
+                  height={200}
+                  width={screenWidth - 80}
+                  spacing={50}
+                  initialSpacing={10}
+                  color1="#10B981"
+                  color2="#EF4444"
+                  textColor1="#10B981"
+                  dataPointsHeight={6}
+                  dataPointsWidth={6}
+                  dataPointsColor1="#10B981"
+                  dataPointsColor2="#EF4444"
+                  textShiftY={-8}
+                  textShiftX={-5}
+                  textFontSize={10}
+                  thickness={3}
+                  hideRules
+                  yAxisColor="#E5E7EB"
+                  xAxisColor="#E5E7EB"
+                  yAxisTextStyle={{ color: '#9CA3AF', fontSize: 10 }}
+                  xAxisLabelTextStyle={{ color: '#6B7280', fontSize: 10 }}
+                  curved
+                />
+                <View style={styles.legend}>
+                  <View style={styles.legendItem}>
+                    <View style={[styles.legendDot, { backgroundColor: '#10B981' }]} />
+                    <Text style={styles.legendText}>Earnings</Text>
+                  </View>
+                  <View style={styles.legendItem}>
+                    <View style={[styles.legendDot, { backgroundColor: '#EF4444' }]} />
+                    <Text style={styles.legendText}>Expenditure</Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+          )}
 
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Investment Distribution</Text>
-            <Text style={styles.chartPlaceholder}>Pie chart will be added in next phase</Text>
-          </View>
+          {/* Investment Distribution Pie Chart */}
+          {stats && stats.total_investment > 0 && (
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Investment Distribution</Text>
+              <View style={styles.pieChartContainer}>
+                <PieChart
+                  data={pieData}
+                  radius={80}
+                  innerRadius={40}
+                  centerLabelComponent={() => (
+                    <View style={{ alignItems: 'center' }}>
+                      <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#1F2937' }}>Total</Text>
+                      <Text style={{ fontSize: 12, color: '#6B7280' }}>
+                        ₹{(stats.total_investment / 1000).toFixed(0)}k
+                      </Text>
+                    </View>
+                  )}
+                />
+                <View style={styles.pieLegend}>
+                  <View style={styles.pieLegendItem}>
+                    <View style={[styles.legendDot, { backgroundColor: '#10B981' }]} />
+                    <View>
+                      <Text style={styles.pieLegendLabel}>Aadil</Text>
+                      <Text style={styles.pieLegendValue}>
+                        ₹{stats.aadil_investment.toLocaleString('en-IN')}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.pieLegendItem}>
+                    <View style={[styles.legendDot, { backgroundColor: '#3B82F6' }]} />
+                    <View>
+                      <Text style={styles.pieLegendLabel}>Imran</Text>
+                      <Text style={styles.pieLegendValue}>
+                        ₹{stats.imran_investment.toLocaleString('en-IN')}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
+            </View>
+          )}
 
           <View style={{ height: 40 }} />
         </ScrollView>
@@ -266,10 +441,52 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1F2937',
   },
-  chartPlaceholder: {
+  chartContainer: {
+    marginTop: 16,
+    alignItems: 'center',
+  },
+  legend: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 24,
+    marginTop: 16,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  legendDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  legendText: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  pieChartContainer: {
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  pieLegend: {
+    marginTop: 24,
+    gap: 12,
+  },
+  pieLegendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  pieLegendLabel: {
     fontSize: 14,
-    color: '#9CA3AF',
-    textAlign: 'center',
-    paddingVertical: 40,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  pieLegendValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
   },
 });
