@@ -141,7 +141,10 @@ export default function ExpenditureScreen() {
   const handleDelete = async (id: string) => {
     if (!user?.name) {
       console.log("DELETE CLICKED ID:", id);
+      console.log("USER OBJECT:", user);
+      console.log("USER NAME:", user?.name);
       Alert.alert('Error', 'User not found');
+      Alert.alert("DEBUG", "Delete button dab gaya");
       return;
     }
   
