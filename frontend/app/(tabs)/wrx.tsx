@@ -40,16 +40,20 @@ export default function WRXScreen() {
   const [unreadCount, setUnreadCount] = useState(0);
   const scrollViewRef = useRef<ScrollView>(null);
 
-  // Auto-fetch when tab is focused
+  // Auto-fetch when tab is focused and scroll to bottom
   useFocusEffect(
     React.useCallback(() => {
       fetchNotifications();
+      // Scroll to bottom after data loads
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: false });
+      }, 300);
     }, [])
   );
 
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30000);
+    const interval = setInterval(fetchNotifications, 30000); // Poll every 30 seconds
     return () => clearInterval(interval);
   }, []);
 
@@ -67,17 +71,17 @@ export default function WRXScreen() {
         const data = await response.json();
         // Reverse array so latest is at bottom
         setNotifications(data.reverse());
-        
+
         // Auto-scroll to bottom after data loads
         setTimeout(() => {
           scrollViewRef.current?.scrollToEnd({ animated: true });
         }, 100);
-        
+
         // Auto-mark as read
         const unreadIds = data
           .filter((n: Notification) => !n.read_by.includes(user?.name || ''))
           .map((n: Notification) => n._id);
-        
+
         if (unreadIds.length > 0) {
           markAsRead(unreadIds);
         }
@@ -128,13 +132,20 @@ export default function WRXScreen() {
     setRefreshing(false);
   };
 
+  const scrollToBottom = () => {
+    scrollViewRef.current?.scrollToEnd({ animated: true });
+  };
+
   const formatTime = (dateString: string) => {
     try {
       const date = new Date(dateString);
       const now = new Date();
       const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
 
-      if (diffInHours < 24) {
+      if (diffInHours < 1) {
+        const diffInMinutes = Math.floor(diffInHours * 60);
+        return diffInMinutes <= 1 ? 'Just now' : `${diffInMinutes}m ago`;
+      } else if (diffInHours < 24) {
         return format(date, 'h:mm a');
       } else if (diffInHours < 48) {
         return 'Yesterday';
@@ -170,29 +181,36 @@ export default function WRXScreen() {
 
   return (
     <View style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>WRX</Text>
           <Text style={styles.subtitle}>Activity Feed</Text>
         </View>
-        {unreadCount > 0 && (
-          <View style={styles.unreadBadge}>
-            <Text style={styles.unreadText}>{unreadCount} new</Text>
-          </View>
-        )}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          {unreadCount > 0 && (
+            <View style={styles.unreadBadge}>
+              <Text style={styles.unreadText}>{unreadCount} new</Text>
+            </View>
+          )}
+          <TouchableOpacity onPress={scrollToBottom}>
+            <Ionicons name="arrow-down-circle-outline" size={28} color="#10B981" />
+          </TouchableOpacity>
+        </View>
       </View>
 
+      {/* Notifications List */}
       <ScrollView
         ref={scrollViewRef}
         style={styles.content}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#10B981" />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
         onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
       >
         {notifications.length === 0 ? (
           <View style={styles.emptyState}>
-            <Ionicons name="chatbubbles-outline" size={64} color="#D1D5DB" />
+            <Ionicons name="notifications-outline" size={64} color="#D1D5DB" />
             <Text style={styles.emptyText}>No activity yet</Text>
             <Text style={styles.emptySubtext}>All updates will appear here</Text>
           </View>
@@ -213,11 +231,11 @@ export default function WRXScreen() {
                   <View
                     style={[
                       styles.iconCircle,
-                      { backgroundColor: `${getTypeColor(notif.type)}20` },
+                      { backgroundColor: `${getTypeColor(notif.type)}15` },
                     ]}
                   >
                     <Ionicons
-                      name={getTypeIcon(notif.type) as any}
+                      name={getTypeIcon(notif.type)}
                       size={20}
                       color={getTypeColor(notif.type)}
                     />
@@ -229,12 +247,13 @@ export default function WRXScreen() {
                   {isUnread && <View style={styles.unreadDot} />}
                 </View>
 
+                {/* Quick Reactions */}
                 <View style={styles.reactionsContainer}>
                   <Text style={styles.reactionsLabel}>Quick Reply:</Text>
                   <View style={styles.reactionButtons}>
                     {QUICK_REACTIONS.map((reaction) => (
                       <TouchableOpacity
-                        key={reaction.label}
+                        key={reaction.emoji}
                         style={[
                           styles.reactionButton,
                           myReaction === reaction.emoji && styles.reactionButtonActive,
@@ -247,6 +266,7 @@ export default function WRXScreen() {
                   </View>
                 </View>
 
+                {/* All Reactions Display */}
                 {Object.keys(notif.reactions || {}).length > 0 && (
                   <View style={styles.allReactions}>
                     {Object.entries(notif.reactions || {}).map(([userName, emoji]) => (
@@ -262,14 +282,16 @@ export default function WRXScreen() {
             );
           })
         )}
-        <View style={{ height: 80 }} />
       </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9FAFB' },
+  container: {
+    flex: 1,
+    backgroundColor: '#F9FAFB',
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -281,14 +303,47 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
   },
-  title: { fontSize: 24, fontWeight: 'bold', color: '#1F2937' },
-  subtitle: { fontSize: 12, color: '#6B7280', marginTop: 2 },
-  unreadBadge: { backgroundColor: '#10B981', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
-  unreadText: { color: '#fff', fontSize: 12, fontWeight: '600' },
-  content: { flex: 1, padding: 16 },
-  emptyState: { alignItems: 'center', justifyContent: 'center', paddingTop: 100 },
-  emptyText: { fontSize: 18, fontWeight: '600', color: '#6B7280', marginTop: 16 },
-  emptySubtext: { fontSize: 14, color: '#9CA3AF', marginTop: 8 },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1F2937',
+  },
+  subtitle: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  unreadBadge: {
+    backgroundColor: '#10B981',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  unreadText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  content: {
+    flex: 1,
+    padding: 16,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 100,
+  },
+  emptyText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#6B7280',
+    marginTop: 16,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    marginTop: 8,
+  },
   notificationCard: {
     backgroundColor: '#fff',
     borderRadius: 12,
@@ -300,16 +355,60 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 2,
   },
-  notificationUnread: { borderLeftWidth: 4, borderLeftColor: '#10B981' },
-  notificationHeader: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 12 },
-  iconCircle: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-  messageContainer: { flex: 1 },
-  message: { fontSize: 14, color: '#1F2937', lineHeight: 20, marginBottom: 4 },
-  time: { fontSize: 11, color: '#9CA3AF' },
-  unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981', marginLeft: 8, marginTop: 6 },
-  reactionsContainer: { borderTopWidth: 1, borderTopColor: '#F3F4F6', paddingTop: 12 },
-  reactionsLabel: { fontSize: 11, color: '#6B7280', marginBottom: 8, fontWeight: '600' },
-  reactionButtons: { flexDirection: 'row', gap: 8 },
+  notificationUnread: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#10B981',
+  },
+  notificationHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  iconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  messageContainer: {
+    flex: 1,
+  },
+  message: {
+    fontSize: 14,
+    color: '#1F2937',
+    lineHeight: 20,
+    marginBottom: 4,
+  },
+  time: {
+    fontSize: 11,
+    color: '#9CA3AF',
+  },
+  unreadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#10B981',
+    marginLeft: 8,
+    marginTop: 6,
+  },
+  reactionsContainer: {
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+    paddingTop: 12,
+  },
+  reactionsLabel: {
+    fontSize: 11,
+    color: '#6B7280',
+    marginBottom: 8,
+    fontWeight: '600',
+  },
+  reactionButtons: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
   reactionButton: {
     backgroundColor: '#F9FAFB',
     borderRadius: 8,
@@ -318,9 +417,28 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
-  reactionButtonActive: { backgroundColor: '#F0FDF4', borderColor: '#10B981' },
-  reactionEmoji: { fontSize: 18 },
-  allReactions: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 },
-  reactionChip: { backgroundColor: '#F0FDF4', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-  reactionChipText: { fontSize: 12, color: '#059669', fontWeight: '500' },
+  reactionButtonActive: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#10B981',
+  },
+  reactionEmoji: {
+    fontSize: 18,
+  },
+  allReactions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 12,
+  },
+  reactionChip: {
+    backgroundColor: '#F0FDF4',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  reactionChipText: {
+    fontSize: 12,
+    color: '#059669',
+    fontWeight: '500',
+  },
 });
