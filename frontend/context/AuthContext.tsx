@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
-// import * as Notifications from 'expo-notifications';
+import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 
@@ -24,14 +24,14 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Configure notifications
-// Notifications.setNotificationHandler({
-//   handleNotification: async () => ({
-//     shouldShowAlert: true,
-//     shouldPlaySound: true,
-//     shouldSetBadge: true,
-//   }),
-// });
+Configure notifications
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+  }),
+});
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -42,7 +42,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     loadUser();
     setupNetworkListener();
-    // registerForPushNotifications();
+    registerForPushNotifications();
   }, []);
 
   useEffect(() => {
@@ -58,33 +58,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return unsubscribe;
   };
 
-  // const registerForPushNotifications = async () => {
-  //   if (!Device.isDevice) {
-  //     console.log('Push notifications only work on physical devices');
-  //     return;
-  //   }
+  const registerForPushNotifications = async () => {
+    if (!Device.isDevice) {
+      console.log('Push notifications only work on physical devices');
+      return;
+    }
 
-  //   try {
-  //     const { status: existingStatus } = await Notifications.getPermissionsAsync();
-  //     let finalStatus = existingStatus;
+    try {
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
 
-  //     if (existingStatus !== 'granted') {
-  //       const { status } = await Notifications.requestPermissionsAsync();
-  //       finalStatus = status;
-  //     }
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
 
-  //     if (finalStatus !== 'granted') {
-  //       console.log('Failed to get push token for push notifications');
-  //       return;
-  //     }
+      if (finalStatus !== 'granted') {
+        console.log('Failed to get push token for push notifications');
+        return;
+      }
 
-  //     const projectId = Constants.expoConfig?.extra?.eas?.projectId;
-  //     const token = await Notifications.getExpoPushTokenAsync({ projectId });
-  //     setExpoPushToken(token.data);
-  //   } catch (error) {
-  //     console.error('Error getting push token:', error);
-  //   }
-  // };
+      const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+      const token = await Notifications.getExpoPushTokenAsync({ projectId });
+      setExpoPushToken(token.data);
+    } catch (error) {
+      console.error('Error getting push token:', error);
+    }
+  };
 
   const loadUser = async () => {
     try {
