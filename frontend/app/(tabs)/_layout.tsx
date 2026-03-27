@@ -8,7 +8,7 @@ export default function TabLayout() {
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: '#10B981',
-        tabBarInactiveTintColor: '#6B7280',
+        tabBarInactiveTintColor: '#9CA3AF',
         tabBarStyle: {
           backgroundColor: '#fff',
           borderTopWidth: 1,
@@ -18,7 +18,7 @@ export default function TabLayout() {
           paddingTop: 8,
         },
         tabBarLabelStyle: {
-          fontSize: 11,
+          fontSize: 12,
           fontWeight: '600',
         },
       }}
@@ -42,29 +42,29 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="expenditure"
-        options={{
-          title: 'Expendi',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="cash" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="investments"
-        options={{
-          title: 'Investi',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="trending-up" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="dls"
         options={{
           title: 'DLS',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="lock-closed" size={size} color={color} />
+            <Ionicons name="wallet" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="expenditure"
+        options={{
+          title: 'Expenditure',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="receipt" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="investment"
+        options={{
+          title: 'Investment',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="trending-up" size={size} color={color} />
           ),
         }}
       />
@@ -73,7 +73,7 @@ export default function TabLayout() {
         options={{
           title: 'WRX',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="chatbubbles" size={size} color={color} />
+            <Ionicons name="notifications" size={size} color={color} />
           ),
           tabBarBadge: undefined, // Will add unread count later
         }}
