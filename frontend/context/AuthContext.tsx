@@ -4,6 +4,7 @@ import NetInfo from '@react-native-community/netinfo';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 
 const BACKEND_URL = "https://wazir-dairy-farm.onrender.com";
 
@@ -39,10 +40,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isOnline, setIsOnline] = useState(true);
   const [expoPushToken, setExpoPushToken] = useState<string>('');
 
+  // useEffect(() => {
+  //   loadUser();
+  //   setupNetworkListener();
+  //   registerForPushNotifications();
+  // }, []);
+
   useEffect(() => {
     loadUser();
     setupNetworkListener();
-    registerForPushNotifications();
+  
+    if (Platform.OS !== 'web') {
+      registerForPushNotifications();
+    }
   }, []);
 
   useEffect(() => {
