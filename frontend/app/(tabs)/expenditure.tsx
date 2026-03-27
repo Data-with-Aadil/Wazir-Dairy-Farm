@@ -360,8 +360,9 @@ export default function ExpenditureScreen() {
                   <Picker
                     selectedValue={category}
                     onValueChange={(value) => {
-                      setCategory(value);
-                      setSubcategory(CATEGORIES[value][0]);
+                      const cat = value as keyof typeof CATEGORIES;
+                      setCategory(cat);
+                      setSubcategory(CATEGORIES[cat][0]);
                     }}
                     style={styles.picker}
                   >
@@ -377,10 +378,10 @@ export default function ExpenditureScreen() {
                 <View style={styles.pickerContainer}>
                   <Picker
                     selectedValue={subcategory}
-                    onValueChange={setSubcategory}
+                    onValueChange={(value) => setSubcategory(value as string)}
                     style={styles.picker}
                   >
-                    {CATEGORIES[category].map((subcat) => (
+                    {CATEGORIES[category as keyof typeof CATEGORIES]?.map((subcat) => (
                       <Picker.Item key={subcat} label={subcat} value={subcat} />
                     ))}
                   </Picker>
