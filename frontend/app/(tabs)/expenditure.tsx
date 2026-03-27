@@ -1,3 +1,7 @@
+Location: /app/(tabs)/expenditure.tsx
+
+Copy and paste this entire code:
+
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -16,7 +20,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
 import { useAuth } from '../../context/AuthContext';
-import { Pressable } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 
 const BACKEND_URL = "https://wazir-dairy-farm.onrender.com";
 
@@ -68,14 +72,26 @@ export default function ExpenditureScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const scrollViewRef = React.useRef<ScrollView>(null);
+
+  // Edit mode states
+  const [editMode, setEditMode] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   // Form fields
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [paidBy, setPaidBy] = useState(user?.name || 'Aadil');
-  const [category, setCategory] = useState<keyof typeof CATEGORIES>('Supplements');
+  const [category, setCategory] = useState('Supplements');
   const [subcategory, setSubcategory] = useState('Mineral Mixture');
   const [notes, setNotes] = useState('');
+
+  // Scroll to top when tab is focused
+  useFocusEffect(
+    React.useCallback(() => {
+      scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+    }, [])
+  );
 
   useEffect(() => {
     fetchExpenditures();
@@ -139,16 +155,68 @@ export default function ExpenditureScreen() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!user?.name) {
-      console.log("DELETE CLICKED ID:", id);
-      console.log("USER OBJECT:", user);
-      console.log("USER NAME:", user?.name);
-      Alert.alert('Error', 'User not found');
-      Alert.alert("DEBUG", "Delete button dab gaya");
+  const handleEdit = (expenditure: Expenditure) => {
+    setEditMode(true);
+    setEditingId(expenditure._id);
+    setAmount(expenditure.amount.toString());
+    setDate(expenditure.date);
+    setPaidBy(expenditure.paid_by);
+    setCategory(expenditure.category);
+    setSubcategory(expenditure.subcategory);
+    setNotes(expenditure.notes || '');
+    setModalVisible(true);
+  };
+
+  const handleUpdateExpenditure = async () => {
+    if (!amount || !editingId) {
+      Alert.alert('Error', 'Please enter amount');
       return;
     }
-  
+
+    const amt = parseFloat(amount);
+    if (isNaN(amt) || amt <= 0) {
+      Alert.alert('Error', 'Please enter valid amount');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/expenditures/${editingId}?user=${user?.name}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: amt,
+          date,
+          paid_by: paidBy,
+          category,
+          subcategory,
+          notes: notes.trim() || undefined,
+        }),
+      });
+
+      if (response.ok) {
+        Alert.alert('Success', 'Expenditure updated successfully');
+        setModalVisible(false);
+        setEditMode(false);
+        setEditingId(null);
+        resetForm();
+        fetchExpenditures();
+      } else {
+        const data = await response.json();
+        Alert.alert('Error', data?.detail || 'Update failed');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update expenditure');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!user?.name) {
+      Alert.alert('Error', 'User not found');
+      return;
+    }
 
     Alert.alert('Delete Entry', 'Are you sure?', [
       { text: 'Cancel', style: 'cancel' },
@@ -183,25 +251,34 @@ export default function ExpenditureScreen() {
     setNotes('');
   };
 
+  const closeModal = () => {
+    setModalVisible(false);
+    setEditMode(false);
+    setEditingId(null);
+    resetForm();
+  };
+
   return (
     <View style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Expenditure</Text>
-        <TouchableOpacity style={styles.addButton} onPress={() => setModalVisible(true)}>
+        <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.addButton}>
           <Ionicons name="add" size={24} color="#fff" />
         </TouchableOpacity>
       </View>
 
+      {/* Expenditures List */}
       <ScrollView
-        keyboardShouldPersistTaps="handled"
+        ref={scrollViewRef}
         style={styles.content}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#10B981" />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
         {expenditures.length === 0 ? (
           <View style={styles.emptyState}>
-            <Ionicons name="cash-outline" size={64} color="#D1D5DB" />
+            <Ionicons name="receipt-outline" size={64} color="#D1D5DB" />
             <Text style={styles.emptyText}>No expenditures yet</Text>
             <Text style={styles.emptySubtext}>Tap + to add your first entry</Text>
           </View>
@@ -216,53 +293,58 @@ export default function ExpenditureScreen() {
                     {exp.category} • {exp.subcategory}
                   </Text>
                   {exp.notes && <Text style={styles.cardNotes}>"{exp.notes}"</Text>}
-                </View>
-                <View style={{ alignItems: 'flex-end' }}>
                   <Text style={styles.cardPaidBy}>Paid by {exp.paid_by}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
                   <TouchableOpacity
-                    onPress={() => {
-                      Alert.alert("CLICK WORKING");
-                      handleDelete(exp._id);
-                    }}
-                    style={{ backgroundColor: 'red', padding: 15 }}
+                    onPress={() => handleEdit(exp)}
+                    style={styles.editIconButton}
                   >
-                    <Text style={{ color: 'white' }}>DELETE</Text>
+                    <Ionicons name="create-outline" size={18} color="#3B82F6" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => handleDelete(exp._id)}
+                    style={styles.deleteIconButton}
+                  >
+                    <Ionicons name="trash-outline" size={18} color="#EF4444" />
                   </TouchableOpacity>
                 </View>
               </View>
             </View>
           ))
         )}
-        <View style={{ height: 80 }} />
       </ScrollView>
 
+      {/* Add/Edit Modal */}
       <Modal
         visible={modalVisible}
         animationType="slide"
-        transparent
-        onRequestClose={() => setModalVisible(false)}
+        transparent={true}
+        onRequestClose={closeModal}
       >
-        <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView 
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
-            style={styles.modalContent}
-          >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add Expenditure</Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
+              <Text style={styles.modalTitle}>
+                {editMode ? 'Edit Expenditure' : 'Add Expenditure'}
+              </Text>
+              <TouchableOpacity onPress={closeModal}>
                 <Ionicons name="close" size={24} color="#6B7280" />
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView>
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Amount (₹)</Text>
                 <TextInput
                   style={styles.input}
                   value={amount}
                   onChangeText={setAmount}
-                  keyboardType="decimal-pad"
                   placeholder="Enter amount"
+                  keyboardType="numeric"
                 />
               </View>
 
@@ -281,7 +363,7 @@ export default function ExpenditureScreen() {
                 <View style={styles.pickerContainer}>
                   <Picker
                     selectedValue={category}
-                    onValueChange={(value: keyof typeof CATEGORIES) => {
+                    onValueChange={(value) => {
                       setCategory(value);
                       setSubcategory(CATEGORIES[value][0]);
                     }}
@@ -299,7 +381,7 @@ export default function ExpenditureScreen() {
                 <View style={styles.pickerContainer}>
                   <Picker
                     selectedValue={subcategory}
-                    onValueChange={(value) => setSubcategory(value)}
+                    onValueChange={setSubcategory}
                     style={styles.picker}
                   >
                     {CATEGORIES[category].map((subcat) => (
@@ -312,28 +394,30 @@ export default function ExpenditureScreen() {
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Notes</Text>
                 <TextInput
-                  style={[styles.input, { height: 80, textAlignVertical: 'top' }]}
+                  style={styles.input}
                   value={notes}
                   onChangeText={setNotes}
-                  placeholder="Optional details..."
+                  placeholder="Optional notes"
                   multiline
                 />
               </View>
 
               <TouchableOpacity
                 style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-                onPress={handleAddExpenditure}
+                onPress={editMode ? handleUpdateExpenditure : handleAddExpenditure}
                 disabled={loading}
               >
                 {loading ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <Text style={styles.submitButtonText}>Add Expenditure</Text>
+                  <Text style={styles.submitButtonText}>
+                    {editMode ? 'Update Expenditure' : 'Add Expenditure'}
+                  </Text>
                 )}
               </TouchableOpacity>
             </ScrollView>
-          </KeyboardAvoidingView>
-        </View>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -411,9 +495,14 @@ const styles = StyleSheet.create({
   cardPaidBy: {
     fontSize: 12,
     color: '#6B7280',
+    marginTop: 4,
+  },
+  editIconButton: {
+    padding: 8,
+    backgroundColor: '#DBEAFE',
+    borderRadius: 8,
   },
   deleteIconButton: {
-    marginTop: 8,
     padding: 8,
     backgroundColor: '#FEE2E2',
     borderRadius: 8,
