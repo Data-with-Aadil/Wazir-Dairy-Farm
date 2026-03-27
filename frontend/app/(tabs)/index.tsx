@@ -314,61 +314,61 @@ export default function DashboardScreen() {
   };
 
   // Prepare line chart data
-  const getLineChartData = () => {
-    const monthlyData: { [key: string]: { earnings: number; expenditure: number } } = {};
+  // const getLineChartData = () => {
+  //   const monthlyData: { [key: string]: { earnings: number; expenditure: number } } = {};
   
-    milkSales.forEach((sale) => {
-      const month = sale.date.substring(0, 7);
-      if (!monthlyData[month]) {
-        monthlyData[month] = { earnings: 0, expenditure: 0 };
-      }
-      monthlyData[month].earnings += sale.earnings;
-    });
+  //   milkSales.forEach((sale) => {
+  //     const month = sale.date.substring(0, 7);
+  //     if (!monthlyData[month]) {
+  //       monthlyData[month] = { earnings: 0, expenditure: 0 };
+  //     }
+  //     monthlyData[month].earnings += sale.earnings;
+  //   });
   
-    expenditures.forEach((exp) => {
-      const month = exp.date.substring(0, 7);
-      if (!monthlyData[month]) {
-        monthlyData[month] = { earnings: 0, expenditure: 0 };
-      }
-      monthlyData[month].expenditure += exp.amount;
-    });
+  //   expenditures.forEach((exp) => {
+  //     const month = exp.date.substring(0, 7);
+  //     if (!monthlyData[month]) {
+  //       monthlyData[month] = { earnings: 0, expenditure: 0 };
+  //     }
+  //     monthlyData[month].expenditure += exp.amount;
+  //   });
   
-    const sortedMonths = Object.keys(monthlyData).sort();
-    const recent = sortedMonths.slice(-6);
+  //   const sortedMonths = Object.keys(monthlyData).sort();
+  //   const recent = sortedMonths.slice(-6);
   
-    const earningsData = recent.map((month) => ({
-      value: monthlyData[month].earnings, // ❌ NO /1000
-      label: month.substring(5),
-    }));
+  //   const earningsData = recent.map((month) => ({
+  //     value: monthlyData[month].earnings, // ❌ NO /1000
+  //     label: month.substring(5),
+  //   }));
   
-    const expenditureData = recent.map((month) => ({
-      value: monthlyData[month].expenditure, // ❌ NO /1000
-    }));
+  //   const expenditureData = recent.map((month) => ({
+  //     value: monthlyData[month].expenditure, // ❌ NO /1000
+  //   }));
   
-    return { earningsData, expenditureData };
-  };
+  //   return { earningsData, expenditureData };
+  // };
 
-  const getPieChartData = () => {
-    if (!stats || stats.total_investment === 0) return [];
+  // const getPieChartData = () => {
+  //   if (!stats || stats.total_investment === 0) return [];
 
-    return [
-      {
-        value: stats.aadil_investment,
-        color: '#10B981',
-        text: `${((stats.aadil_investment / stats.total_investment) * 100).toFixed(0)}%`,
-        label: 'Aadil',
-      },
-      {
-        value: stats.imran_investment,
-        color: '#3B82F6',
-        text: `${((stats.imran_investment / stats.total_investment) * 100).toFixed(0)}%`,
-        label: 'Imran',
-      },
-    ];
-  };
+  //   return [
+  //     {
+  //       value: stats.aadil_investment,
+  //       color: '#10B981',
+  //       text: `${((stats.aadil_investment / stats.total_investment) * 100).toFixed(0)}%`,
+  //       label: 'Aadil',
+  //     },
+  //     {
+  //       value: stats.imran_investment,
+  //       color: '#3B82F6',
+  //       text: `${((stats.imran_investment / stats.total_investment) * 100).toFixed(0)}%`,
+  //       label: 'Imran',
+  //     },
+  //   ];
+  // };
 
-  const { earningsData, expenditureData } = getLineChartData();
-  const pieData = getPieChartData();
+  // const { earningsData, expenditureData } = getLineChartData();
+  // const pieData = getPieChartData();
 
   return (
     <ImageBackground
@@ -460,7 +460,7 @@ export default function DashboardScreen() {
               </View>
               <View style={styles.dlsDivider} />
               <View style={styles.dlsItem}>
-                <Text style={styles.dlsLabel}>Net Profit</Text>
+                <Text style={styles.dlsLabel}>Actual Monthly Profit</Text>
                 <Text style={[styles.dlsNetProfit, { color: (currentMonthDLS - (stats?.total_expenditure || 0)) >= 0 ? '#10B981' : '#EF4444' }]}>
                   ₹{(currentMonthDLS - (stats?.total_expenditure || 0)).toLocaleString('en-IN')}
                 </Text>
@@ -468,7 +468,7 @@ export default function DashboardScreen() {
             </View>
           </View>
 
-          {/* Charts */}
+          /* {/* Charts */}
           {earningsData.length > 0 && (
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Earnings vs Expenditure (Last 6 Months)</Text>
@@ -548,7 +548,7 @@ export default function DashboardScreen() {
                 </View>
               </View>
             </View>
-          )}
+          )} */
 
           {/* Event Calendar */}
           <View style={styles.card}>
@@ -727,14 +727,14 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   cardTitle: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
-    color: '#6B7280',
-    marginBottom: 8,
+    color: '#374151',
+    marginBottom: 10,
   },
   mainValue: {
-    fontSize: 32,
-    fontWeight: 'bold',
+    fontSize: 24,
+    fontWeight: '700',
     color: '#10B981',
   },
   divider: {
@@ -755,14 +755,14 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   statValue: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
-    color: '#1F2937',
+    color: '#111827',
   },
   metricsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 8,
+    marginTop: 12,
   },
   metricItem: {
     alignItems: 'center',
@@ -801,8 +801,8 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   dlsMonthValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontWeight: '600',
     color: '#3B82F6',
   },
   chartContainer: {
@@ -854,13 +854,13 @@ const styles = StyleSheet.create({
     color: '#1F2937',
   },
   dlsValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontWeight: '600',
     color: '#10B981',
   },
   dlsNetProfit: {
-    fontSize: 24,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontWeight: '600',
   },
   calendarHeader: {
     flexDirection: 'row',
