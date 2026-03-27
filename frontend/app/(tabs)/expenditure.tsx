@@ -140,9 +140,11 @@ export default function ExpenditureScreen() {
 
   const handleDelete = async (id: string) => {
     if (!user?.name) {
+      console.log("DELETE CLICKED ID:", id);
       Alert.alert('Error', 'User not found');
       return;
     }
+  
 
     Alert.alert('Delete Entry', 'Are you sure?', [
       { text: 'Cancel', style: 'cancel' },
