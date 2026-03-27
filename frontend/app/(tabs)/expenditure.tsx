@@ -225,8 +225,10 @@ export default function ExpenditureScreen() {
                 <View style={{ alignItems: 'flex-end' }}>
                   <Text style={styles.cardPaidBy}>Paid by {exp.paid_by}</Text>
                   <TouchableOpacity
-                    onPress={() => handleDelete(exp._id)}
-                    style={{ marginTop: 8 }}
+                    onPress={() => {
+                      console.log("DELETE CLICKED", exp._id);
+                      handleDelete(exp._id);
+                    }}
                   >
                     <Ionicons name="trash-outline" size={20} color="#EF4444" />
                   </TouchableOpacity>
