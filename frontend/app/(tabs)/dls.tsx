@@ -14,6 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
 import { useAuth } from '../../context/AuthContext';
+import { useFocusEffect } from 'expo-router';
 
 const BACKEND_URL = "https://wazir-dairy-farm.onrender.com";
 
@@ -37,6 +38,11 @@ export default function DLSScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const scrollViewRef = React.useRef<ScrollView>(null);
+
+  // Edit mode states
+  const [editMode, setEditMode] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const currentDate = new Date();
   const [month, setMonth] = useState((currentDate.getMonth() + 1).toString());
@@ -44,6 +50,13 @@ export default function DLSScreen() {
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(currentDate.toISOString().split('T')[0]);
   const [notes, setNotes] = useState('');
+
+  // Scroll to top when tab is focused
+  useFocusEffect(
+    React.useCallback(() => {
+      scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+    }, [])
+  );
 
   useEffect(() => {
     fetchDLS();
@@ -106,6 +119,60 @@ export default function DLSScreen() {
     }
   };
 
+  const handleEdit = (dls: DLS) => {
+    setEditMode(true);
+    setEditingId(dls._id);
+    setMonth(dls.month.toString());
+    setYear(dls.year.toString());
+    setAmount(dls.amount.toString());
+    setDate(dls.date);
+    setNotes(dls.notes || '');
+    setModalVisible(true);
+  };
+
+  const handleUpdateDLS = async () => {
+    if (!amount || !editingId) {
+      Alert.alert('Error', 'Please enter amount');
+      return;
+    }
+
+    const amt = parseFloat(amount);
+    if (isNaN(amt)) {
+      Alert.alert('Error', 'Please enter valid amount');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/dairy-lock-sales/${editingId}?user=${user?.name}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          month: parseInt(month),
+          year: parseInt(year),
+          amount: amt,
+          date,
+          notes: notes || undefined,
+        }),
+      });
+
+      if (response.ok) {
+        Alert.alert('Success', 'DLS updated successfully');
+        setModalVisible(false);
+        setEditMode(false);
+        setEditingId(null);
+        resetForm();
+        fetchDLS();
+      } else {
+        Alert.alert('Error', 'Update failed');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update DLS');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleDelete = async (id: string) => {
     Alert.alert('Delete Entry', 'Are you sure you want to delete this entry?', [
       { text: 'Cancel', style: 'cancel' },
@@ -138,29 +205,39 @@ export default function DLSScreen() {
     setNotes('');
   };
 
+  const closeModal = () => {
+    setModalVisible(false);
+    setEditMode(false);
+    setEditingId(null);
+    resetForm();
+  };
+
   const getMonthName = (monthNum: number) => MONTHS[monthNum - 1];
 
   return (
     <View style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>Dairy Lock Sales</Text>
           <Text style={styles.subtitle}>Actual Payments Received</Text>
         </View>
-        <TouchableOpacity style={styles.addButton} onPress={() => setModalVisible(true)}>
+        <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.addButton}>
           <Ionicons name="add" size={24} color="#fff" />
         </TouchableOpacity>
       </View>
 
+      {/* DLS List */}
       <ScrollView
+        ref={scrollViewRef}
         style={styles.content}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#10B981" />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
         {dlsList.length === 0 ? (
           <View style={styles.emptyState}>
-            <Ionicons name="lock-closed-outline" size={64} color="#D1D5DB" />
+            <Ionicons name="wallet-outline" size={64} color="#D1D5DB" />
             <Text style={styles.emptyText}>No payments recorded yet</Text>
             <Text style={styles.emptySubtext}>Tap + to add your first payment</Text>
           </View>
@@ -179,61 +256,66 @@ export default function DLSScreen() {
                   <Text style={styles.cardDate}>Received on {dls.date}</Text>
                   {dls.notes && <Text style={styles.cardNotes}>{dls.notes}</Text>}
                 </View>
-                <TouchableOpacity onPress={() => handleDelete(dls._id)} style={styles.deleteButton}>
-                  <Ionicons name="trash-outline" size={20} color="#EF4444" />
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TouchableOpacity onPress={() => handleEdit(dls)} style={styles.editButton}>
+                    <Ionicons name="create-outline" size={20} color="#3B82F6" />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => handleDelete(dls._id)} style={styles.deleteButton}>
+                    <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
           ))
         )}
-        <View style={{ height: 80 }} />
       </ScrollView>
 
+      {/* Add/Edit Modal */}
       <Modal
         visible={modalVisible}
         animationType="slide"
-        transparent
-        onRequestClose={() => setModalVisible(false)}
+        transparent={true}
+        onRequestClose={closeModal}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add Payment</Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
+              <Text style={styles.modalTitle}>
+                {editMode ? 'Edit Payment' : 'Add Payment'}
+              </Text>
+              <TouchableOpacity onPress={closeModal}>
                 <Ionicons name="close" size={24} color="#6B7280" />
               </TouchableOpacity>
             </View>
 
             <ScrollView>
-              <View style={styles.formRow}>
-                <View style={[styles.formGroup, { flex: 1, marginRight: 8 }]}>
-                  <Text style={styles.label}>Month</Text>
-                  <View style={styles.pickerContainer}>
-                    <Picker
-                      selectedValue={month}
-                      onValueChange={(value) => setMonth(value)}
-                      style={styles.picker}
-                    >
-                      {MONTHS.map((m, idx) => (
-                        <Picker.Item key={idx} label={m} value={(idx + 1).toString()} />
-                      ))}
-                    </Picker>
-                  </View>
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Month</Text>
+                <View style={styles.pickerContainer}>
+                  <Picker
+                    selectedValue={month}
+                    onValueChange={(value) => setMonth(value)}
+                    style={styles.picker}
+                  >
+                    {MONTHS.map((m, idx) => (
+                      <Picker.Item key={m} label={m} value={(idx + 1).toString()} />
+                    ))}
+                  </Picker>
                 </View>
+              </View>
 
-                <View style={[styles.formGroup, { flex: 1, marginLeft: 8 }]}>
-                  <Text style={styles.label}>Year</Text>
-                  <View style={styles.pickerContainer}>
-                    <Picker
-                      selectedValue={year}
-                      onValueChange={(value) => setYear(value)}
-                      style={styles.picker}
-                    >
-                      {[2024, 2025, 2026, 2027].map((y) => (
-                        <Picker.Item key={y} label={y.toString()} value={y.toString()} />
-                      ))}
-                    </Picker>
-                  </View>
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Year</Text>
+                <View style={styles.pickerContainer}>
+                  <Picker
+                    selectedValue={year}
+                    onValueChange={(value) => setYear(value)}
+                    style={styles.picker}
+                  >
+                    {[2024, 2025, 2026, 2027].map((y) => (
+                      <Picker.Item key={y} label={y.toString()} value={y.toString()} />
+                    ))}
+                  </Picker>
                 </View>
               </View>
 
@@ -243,8 +325,8 @@ export default function DLSScreen() {
                   style={styles.input}
                   value={amount}
                   onChangeText={setAmount}
-                  keyboardType="decimal-pad"
-                  placeholder="Enter amount received"
+                  placeholder="Enter amount"
+                  keyboardType="numeric"
                 />
               </View>
 
@@ -261,24 +343,25 @@ export default function DLSScreen() {
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Notes (Optional)</Text>
                 <TextInput
-                  style={[styles.input, styles.textArea]}
+                  style={styles.input}
                   value={notes}
                   onChangeText={setNotes}
-                  placeholder="Add any notes"
+                  placeholder="Optional notes"
                   multiline
-                  numberOfLines={3}
                 />
               </View>
 
               <TouchableOpacity
                 style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-                onPress={handleAddDLS}
+                onPress={editMode ? handleUpdateDLS : handleAddDLS}
                 disabled={loading}
               >
                 {loading ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <Text style={styles.submitButtonText}>Add Payment</Text>
+                  <Text style={styles.submitButtonText}>
+                    {editMode ? 'Update Payment' : 'Add Payment'}
+                  </Text>
                 )}
               </TouchableOpacity>
             </ScrollView>
@@ -399,6 +482,9 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontStyle: 'italic',
   },
+  editButton: {
+    padding: 8,
+  },
   deleteButton: {
     padding: 8,
   },
@@ -425,9 +511,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#1F2937',
   },
-  formRow: {
-    flexDirection: 'row',
-  },
   formGroup: {
     marginBottom: 16,
   },
@@ -446,10 +529,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     fontSize: 16,
     color: '#1F2937',
-  },
-  textArea: {
-    height: 80,
-    textAlignVertical: 'top',
   },
   pickerContainer: {
     backgroundColor: '#F9FAFB',
