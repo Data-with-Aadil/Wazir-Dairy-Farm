@@ -20,9 +20,34 @@ import { useAuth } from '../../context/AuthContext';
 const BACKEND_URL = "https://wazir-dairy-farm.onrender.com";
 
 const CATEGORIES = {
-  Supplements: ['Mineral Mixture', 'Calcium', 'Bypass Fat', 'Bypass Protein', 'Yeast Culture', 'Toxin Binder', 'Liver Tonic', 'Probiotics', 'Electrolytes', 'Others'],
+  Supplements: [
+    'Mineral Mixture',
+    'Calcium',
+    'Bypass Fat',
+    'Bypass Protein',
+    'Yeast Culture',
+    'Toxin Binder',
+    'Liver Tonic',
+    'Probiotics',
+    'Electrolytes',
+    'Others',
+  ],
   Fodder: ['Sukha Chara', 'Hara Chara', 'Silage', 'Others'],
-  Feed: ['Gud', 'Makka', 'Gehu Churi', 'Chana Churi', 'Jowar', 'Bajra', 'Binola', 'Soybean Khal', 'Mustard Khal', 'Groundnut Khal', 'Salt', 'Soda', 'Others'],
+  Feed: [
+    'Gud',
+    'Makka',
+    'Gehu Churi',
+    'Chana Churi',
+    'Jowar',
+    'Bajra',
+    'Binola',
+    'Soybean Khal',
+    'Mustard Khal',
+    'Groundnut Khal',
+    'Salt',
+    'Soda',
+    'Others',
+  ],
   Others: ['Labour', 'Electricity', 'Veterinary', 'Transport', 'Maintenance', 'Others'],
 };
 
@@ -74,9 +99,14 @@ export default function ExpenditureScreen() {
   };
 
   const handleAddExpenditure = async () => {
+    if (!amount) {
+      Alert.alert('Error', 'Please enter amount');
+      return;
+    }
+
     const amt = parseFloat(amount);
-    if (!amount || isNaN(amt) || amt <= 0) {
-      Alert.alert('Error', 'Please enter a valid amount');
+    if (isNaN(amt) || amt <= 0) {
+      Alert.alert('Error', 'Please enter valid amount');
       return;
     }
 
@@ -108,13 +138,13 @@ export default function ExpenditureScreen() {
     }
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (!user?.name) {
       Alert.alert('Error', 'User not found');
       return;
     }
-    
-    Alert.alert('Delete Entry', 'Are you sure you want to delete this?', [
+
+    Alert.alert('Delete Entry', 'Are you sure?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -124,7 +154,7 @@ export default function ExpenditureScreen() {
             const url = `${BACKEND_URL}/api/expenditures/${id}?user=${user.name}`;
             const res = await fetch(url, { method: 'DELETE' });
             if (res.ok) {
-              Alert.alert('Deleted', 'Entry removed');
+              Alert.alert('Deleted', 'Entry deleted successfully');
               fetchExpenditures();
             } else {
               const data = await res.json();
@@ -149,7 +179,6 @@ export default function ExpenditureScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Expenditure</Text>
         <TouchableOpacity style={styles.addButton} onPress={() => setModalVisible(true)}>
@@ -157,10 +186,11 @@ export default function ExpenditureScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* List */}
       <ScrollView
         style={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#10B981" />}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#10B981" />
+        }
       >
         {expenditures.length === 0 ? (
           <View style={styles.emptyState}>
@@ -175,12 +205,17 @@ export default function ExpenditureScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.cardDate}>{exp.date}</Text>
                   <Text style={styles.cardAmount}>₹{exp.amount.toLocaleString('en-IN')}</Text>
-                  <Text style={styles.cardCategory}>{exp.category} • {exp.subcategory}</Text>
+                  <Text style={styles.cardCategory}>
+                    {exp.category} • {exp.subcategory}
+                  </Text>
                   {exp.notes && <Text style={styles.cardNotes}>"{exp.notes}"</Text>}
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={styles.cardPaidBy}>By {exp.paid_by}</Text>
-                  <TouchableOpacity onPress={() => handleDelete(exp._id)} style={styles.deleteBtn}>
+                  <Text style={styles.cardPaidBy}>Paid by {exp.paid_by}</Text>
+                  <TouchableOpacity
+                    onPress={() => handleDelete(exp._id)}
+                    style={styles.deleteIconButton}
+                  >
                     <Ionicons name="trash-outline" size={20} color="#EF4444" />
                   </TouchableOpacity>
                 </View>
@@ -188,15 +223,22 @@ export default function ExpenditureScreen() {
             </View>
           ))
         )}
-        <View style={{ height: 100 }} />
+        <View style={{ height: 80 }} />
       </ScrollView>
 
-      {/* Modal */}
-      <Modal visible={modalVisible} animationType="slide" transparent onRequestClose={() => setModalVisible(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+      <Modal
+        visible={modalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+            style={styles.modalContent}
+          >
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add New Entry</Text>
+              <Text style={styles.modalTitle}>Add Expenditure</Text>
               <TouchableOpacity onPress={() => setModalVisible(false)}>
                 <Ionicons name="close" size={24} color="#6B7280" />
               </TouchableOpacity>
@@ -205,7 +247,23 @@ export default function ExpenditureScreen() {
             <ScrollView showsVerticalScrollIndicator={false}>
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Amount (₹)</Text>
-                <TextInput style={styles.input} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="0.00" />
+                <TextInput
+                  style={styles.input}
+                  value={amount}
+                  onChangeText={setAmount}
+                  keyboardType="decimal-pad"
+                  placeholder="Enter amount"
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Date</Text>
+                <TextInput
+                  style={styles.input}
+                  value={date}
+                  onChangeText={setDate}
+                  placeholder="YYYY-MM-DD"
+                />
               </View>
 
               <View style={styles.formGroup}>
@@ -213,12 +271,15 @@ export default function ExpenditureScreen() {
                 <View style={styles.pickerContainer}>
                   <Picker
                     selectedValue={category}
-                    onValueChange={(val: keyof typeof CATEGORIES) => {
-                      setCategory(val);
-                      setSubcategory(CATEGORIES[val][0]);
+                    onValueChange={(value: keyof typeof CATEGORIES) => {
+                      setCategory(value);
+                      setSubcategory(CATEGORIES[value][0]);
                     }}
+                    style={styles.picker}
                   >
-                    {Object.keys(CATEGORIES).map(cat => <Picker.Item key={cat} label={cat} value={cat} />)}
+                    {Object.keys(CATEGORIES).map((cat) => (
+                      <Picker.Item key={cat} label={cat} value={cat} />
+                    ))}
                   </Picker>
                 </View>
               </View>
@@ -226,64 +287,208 @@ export default function ExpenditureScreen() {
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Subcategory</Text>
                 <View style={styles.pickerContainer}>
-                  <Picker selectedValue={subcategory} onValueChange={(val) => setSubcategory(val)}>
-                    {CATEGORIES[category].map(sub => <Picker.Item key={sub} label={sub} value={sub} />)}
+                  <Picker
+                    selectedValue={subcategory}
+                    onValueChange={(value) => setSubcategory(value)}
+                    style={styles.picker}
+                  >
+                    {CATEGORIES[category].map((subcat) => (
+                      <Picker.Item key={subcat} label={subcat} value={subcat} />
+                    ))}
                   </Picker>
                 </View>
               </View>
 
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Notes</Text>
-                <TextInput 
-                  style={[styles.input, { height: 80, textAlignVertical: 'top' }]} 
-                  value={notes} 
-                  onChangeText={setNotes} 
-                  placeholder="Optional details..." 
-                  multiline 
+                <TextInput
+                  style={[styles.input, { height: 80, textAlignVertical: 'top' }]}
+                  value={notes}
+                  onChangeText={setNotes}
+                  placeholder="Optional details..."
+                  multiline
                 />
               </View>
 
-              <TouchableOpacity 
-                style={[styles.submitButton, loading && styles.submitButtonDisabled]} 
-                onPress={handleAddExpenditure} 
+              <TouchableOpacity
+                style={[styles.submitButton, loading && styles.submitButtonDisabled]}
+                onPress={handleAddExpenditure}
                 disabled={loading}
               >
-                {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitButtonText}>Save Expenditure</Text>}
+                {loading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.submitButtonText}>Add Expenditure</Text>
+                )}
               </TouchableOpacity>
             </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
+          </KeyboardAvoidingView>
+        </View>
       </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9FAFB' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 60, paddingBottom: 16, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
-  title: { fontSize: 24, fontWeight: 'bold', color: '#1F2937' },
-  addButton: { backgroundColor: '#10B981', width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center' },
-  content: { flex: 1, padding: 16 },
-  card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, elevation: 2, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4 },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between' },
-  cardDate: { fontSize: 12, color: '#6B7280' },
-  cardAmount: { fontSize: 22, fontWeight: 'bold', color: '#EF4444', marginVertical: 4 },
-  cardCategory: { fontSize: 13, color: '#4B5563', fontWeight: '500' },
-  cardNotes: { fontSize: 12, color: '#9CA3AF', fontStyle: 'italic', marginTop: 4 },
-  cardPaidBy: { fontSize: 12, color: '#6B7280' },
-  deleteBtn: { marginTop: 12, padding: 8, backgroundColor: '#FEE2E2', borderRadius: 8 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, maxHeight: '85%' },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
-  modalTitle: { fontSize: 20, fontWeight: 'bold' },
-  formGroup: { marginBottom: 16 },
-  label: { fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8 },
-  input: { backgroundColor: '#F9FAFB', borderRadius: 8, borderWidth: 1, borderColor: '#E5E7EB', padding: 12, fontSize: 16 },
-  pickerContainer: { backgroundColor: '#F9FAFB', borderRadius: 8, borderWidth: 1, borderColor: '#E5E7EB' },
-  submitButton: { backgroundColor: '#10B981', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 10 },
-  submitButtonDisabled: { backgroundColor: '#9CA3AF' },
-  submitButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  emptyState: { alignItems: 'center', marginTop: 100 },
-  emptyText: { fontSize: 18, fontWeight: '600', color: '#6B7280', marginTop: 10 },
-  emptySubtext: { color: '#9CA3AF' },
+  container: {
+    flex: 1,
+    backgroundColor: '#F9FAFB',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 56,
+    paddingBottom: 16,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1F2937',
+  },
+  addButton: {
+    backgroundColor: '#10B981',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  content: {
+    flex: 1,
+    padding: 16,
+  },
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  cardDate: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginBottom: 4,
+  },
+  cardAmount: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#EF4444',
+    marginBottom: 8,
+  },
+  cardCategory: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  cardNotes: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontStyle: 'italic',
+    marginTop: 4,
+  },
+  cardPaidBy: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  deleteIconButton: {
+    marginTop: 8,
+    padding: 8,
+    backgroundColor: '#FEE2E2',
+    borderRadius: 8,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 100,
+  },
+  emptyText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#6B7280',
+    marginTop: 16,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    marginTop: 8,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    maxHeight: '90%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1F2937',
+  },
+  formGroup: {
+    marginBottom: 16,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  input: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    color: '#1F2937',
+  },
+  pickerContainer: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    overflow: 'hidden',
+  },
+  picker: {
+    height: 50,
+  },
+  submitButton: {
+    backgroundColor: '#10B981',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  submitButtonDisabled: {
+    backgroundColor: '#9CA3AF',
+  },
+  submitButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
 });
