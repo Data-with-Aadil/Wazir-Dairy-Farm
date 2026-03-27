@@ -215,6 +215,7 @@ export default function ExpenditureScreen() {
                   <TouchableOpacity
                     onPress={() => handleDelete(exp._id)}
                     style={styles.deleteIconButton}
+                    hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
                   >
                     <Ionicons name="trash-outline" size={20} color="#EF4444" />
                   </TouchableOpacity>
