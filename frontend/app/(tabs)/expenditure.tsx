@@ -137,22 +137,38 @@ export default function ExpenditureScreen() {
   };
 
   const handleDelete = async (id: string) => {
-    Alert.alert('Delete Entry', 'Are you sure you want to delete this entry?', [
+    console.log("USER:", user);
+    console.log("ID:", id);
+  
+    if (!user?.name) {
+      Alert.alert('Error', 'User not found');
+      return;
+    }
+  
+    Alert.alert('Delete Entry', 'Are you sure?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
-        style: 'destructive',
         onPress: async () => {
+          console.log("CLICKED DELETE");
+  
           try {
-            const response = await fetch(
-              `${BACKEND_URL}/api/expenditures/${id}?user=${user?.name}`,
-              { method: 'DELETE' }
-            );
-            if (response.ok) {
+            const url = `${BACKEND_URL}/api/expenditures/${id}?user=${user.name}`;
+            console.log("URL:", url);
+  
+            const res = await fetch(url, { method: 'DELETE' });
+            const data = await res.json();
+  
+            console.log("RESPONSE:", data);
+  
+            if (res.ok) {
               fetchExpenditures();
+            } else {
+              Alert.alert('Error', data?.detail || 'Delete failed');
             }
-          } catch (error) {
-            Alert.alert('Error', 'Failed to delete entry');
+          } catch (err) {
+            console.log(err);
+            Alert.alert('Error', 'Failed to delete');
           }
         },
       },
