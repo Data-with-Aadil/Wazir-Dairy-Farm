@@ -16,6 +16,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
 import { useAuth } from '../../context/AuthContext';
+import { Pressable } from 'react-native';
 
 const BACKEND_URL = "https://wazir-dairy-farm.onrender.com";
 
@@ -218,13 +219,12 @@ export default function ExpenditureScreen() {
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
                   <Text style={styles.cardPaidBy}>Paid by {exp.paid_by}</Text>
-                  <TouchableOpacity
+                  <Pressable
                     onPress={() => handleDelete(exp._id)}
                     style={styles.deleteIconButton}
-                    hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
                   >
                     <Ionicons name="trash-outline" size={20} color="#EF4444" />
-                  </TouchableOpacity>
+                  </Pressable>
                 </View>
               </View>
             </View>
