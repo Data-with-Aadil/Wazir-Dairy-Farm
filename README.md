@@ -623,3 +623,42 @@ npx expo start -c
 ---
 
 **This is your real developer muscle memory 💪**
+
+
+See logs: https://expo.dev/accounts/aadil111/projects/wazir-dairy-farm/builds/97132012-b79f-4333-afa6-bf5954985376
+
+Waiting for build to complete. You can press Ctrl+C to exit.
+  Build queued...
+
+Start builds sooner in the priority queue.
+Sign up for a paid plan at https://expo.dev/accounts/aadil111/settings/billing
+
+Waiting in Free tier queue
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■| 
+
+✔ Build finished
+  ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
+  █ ▄▄▄▄▄ █▄▀ ▄ ▀▄█ █▀▀▄▄ ██ ▀█ █ ▄▄▄▄▄ █
+  █ █   █ ███▄▄█ ▄█▄▀▀▀  ▄▀▀  ▄▄█ █   █ █
+  █ █▄▄▄█ ██▄▀▀▄█▄██▄█▄ ▄▀▀ ███▀█ █▄▄▄█ █
+  █▄▄▄▄▄▄▄█ █ ▀▄▀▄▀▄█▄█ █ ▀ ▀▄█ █▄▄▄▄▄▄▄█
+  █▄▄█  █▄█▀▄▄▀▀█  ▀▄▄ ▄▀▀▀█▀▀▀▄█▄▀▀██▀▄█
+  █   █ █▄▀▄██▄▀▄█   ▄█ ▄█ ▀▄▀▄ ▄▄▄▄▄ ▄▄█
+  █▀ █▄▀▀▄█▀ ▀ ▀▀▀ ██▄▄▄█▀▀▄▀█▀ █▄▄▀ ▀ ▄█
+  ██  ▄▄▀▄  ████▄█▄▄▄▄▄██ ▀ ▄▀▄▄▀▄▀▄█▀▄ █
+  █▀ ▀▀▀█▄▄ ▀▄▄▀▄   ▀▄  ▀▄██▄▀ █▀▄██ ▄▄▄█
+  ██▀▀▄▄█▄▄▀▄ ▄ ▀▀▄▀█  ▀▄ ▄▀▀ ▄█▀█▄▀▀██ █
+  █  ▀█ ▄▄▀▀▄█ ▀▀▀▀ ▄▄▀█▀ ▀▄▀  ▄ ▄▀  ▀ ▄█
+  ██ ██  ▄▀▄▄▄ ▀█▀ █  █▀▄▄▄█▄▀▄ █  ▄▀▀▀ █
+  █▀▄▄ █ ▄▄ ▄▀▀▀▀▀  █▄▄███ ██▀  █▄▄▀█▀▀▄█
+  █ ▄▄▄▄▀▄▄▀█▄█▄█▀▄▀█▄ ▀█▀▀██▀ █▄█ ▀  ▄ █
+  █▄██▄██▄▄▀▀▄▄▀▄█▀ ▀▄▀ █ █ ▄██ ▄▄▄ █  ██
+  █ ▄▄▄▄▄ ██▄▀▄█▀▀ ▀█ ▄█▄  ▀ ██ █▄█  ▄█ █
+  █ █   █ █ ▀▄▀▀██ ▀  ▀▀██▀██  ▄  ▄▄ ████
+  █ █▄▄▄█ █▀█▄ ▀█▀ ▀ ██▀█▀ ▄▄  ██▀▄ █ ▀ █
+  █▄▄▄▄▄▄▄█▄▄▄███▄▄▄███▄██▄████▄▄▄██▄██▄█
+
+
+🤖 Open this link on your Android devices (or scan the QR code) to install the app:
+https://expo.dev/accounts/aadil111/projects/wazir-dairy-farm/builds/97132012-b79f-4333-afa6-bf5954985376
+
