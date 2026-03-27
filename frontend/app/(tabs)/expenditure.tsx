@@ -187,6 +187,7 @@ export default function ExpenditureScreen() {
       </View>
 
       <ScrollView
+        keyboardShouldPersistTaps="handled"
         style={styles.content}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#10B981" />
