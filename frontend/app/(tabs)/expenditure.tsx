@@ -1,7 +1,3 @@
-Location: /app/(tabs)/expenditure.tsx
-
-Copy and paste this entire code:
-
 import React, { useState, useEffect } from 'react';
 import {
   View,
