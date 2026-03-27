@@ -14,6 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
 import { useAuth } from '../../context/AuthContext';
+import { useFocusEffect } from 'expo-router';
 
 const BACKEND_URL = "https://wazir-dairy-farm.onrender.com";
 
@@ -32,6 +33,7 @@ interface Investment {
   date: string;
   investor: string;
   category: string;
+  notes?: string;
 }
 
 export default function InvestmentsScreen() {
@@ -40,11 +42,24 @@ export default function InvestmentsScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const scrollViewRef = React.useRef<ScrollView>(null);
+
+  // Edit mode states
+  const [editMode, setEditMode] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [investor, setInvestor] = useState(user?.name || 'Aadil');
   const [category, setCategory] = useState('Shed / Infrastructure');
+  const [notes, setNotes] = useState('');
+
+  // Scroll to top when tab is focused
+  useFocusEffect(
+    React.useCallback(() => {
+      scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+    }, [])
+  );
 
   useEffect(() => {
     fetchInvestments();
@@ -75,7 +90,7 @@ export default function InvestmentsScreen() {
     }
 
     const amt = parseFloat(amount);
-    if (isNaN(amt)) {
+    if (isNaN(amt) || amt <= 0) {
       Alert.alert('Error', 'Please enter valid amount');
       return;
     }
@@ -90,6 +105,7 @@ export default function InvestmentsScreen() {
           date,
           investor,
           category,
+          notes: notes.trim() || undefined,
         }),
       });
 
@@ -106,7 +122,67 @@ export default function InvestmentsScreen() {
     }
   };
 
+  const handleEdit = (investment: Investment) => {
+    setEditMode(true);
+    setEditingId(investment._id);
+    setAmount(investment.amount.toString());
+    setDate(investment.date);
+    setInvestor(investment.investor);
+    setCategory(investment.category);
+    setNotes(investment.notes || '');
+    setModalVisible(true);
+  };
+
+  const handleUpdateInvestment = async () => {
+    if (!amount || !editingId) {
+      Alert.alert('Error', 'Please enter amount');
+      return;
+    }
+
+    const amt = parseFloat(amount);
+    if (isNaN(amt) || amt <= 0) {
+      Alert.alert('Error', 'Please enter valid amount');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/investments/${editingId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: amt,
+          date,
+          investor,
+          category,
+          notes: notes.trim() || undefined,
+        }),
+      });
+
+      if (response.ok) {
+        Alert.alert('Success', 'Investment updated successfully');
+        setModalVisible(false);
+        setEditMode(false);
+        setEditingId(null);
+        resetForm();
+        fetchInvestments();
+      } else {
+        const data = await response.json();
+        Alert.alert('Error', data?.detail || 'Update failed');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update investment');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleDelete = async (id: string) => {
+    if (!user?.name) {
+      Alert.alert('Error', 'User not found');
+      return;
+    }
+
     Alert.alert('Delete Entry', 'Are you sure you want to delete this entry?', [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -115,11 +191,15 @@ export default function InvestmentsScreen() {
         onPress: async () => {
           try {
             const response = await fetch(
-              `${BACKEND_URL}/api/investments/${id}?user=${user?.name}`,
+              `${BACKEND_URL}/api/investments/${id}?user=${user.name}`,
               { method: 'DELETE' }
             );
             if (response.ok) {
+              Alert.alert('Deleted', 'Investment deleted successfully');
               fetchInvestments();
+            } else {
+              const data = await response.json();
+              Alert.alert('Error', data?.detail || 'Delete failed');
             }
           } catch (error) {
             Alert.alert('Error', 'Failed to delete entry');
@@ -134,21 +214,32 @@ export default function InvestmentsScreen() {
     setDate(new Date().toISOString().split('T')[0]);
     setInvestor(user?.name || 'Aadil');
     setCategory('Shed / Infrastructure');
+    setNotes('');
+  };
+
+  const closeModal = () => {
+    setModalVisible(false);
+    setEditMode(false);
+    setEditingId(null);
+    resetForm();
   };
 
   return (
     <View style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Investments</Text>
-        <TouchableOpacity style={styles.addButton} onPress={() => setModalVisible(true)}>
+        <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.addButton}>
           <Ionicons name="add" size={24} color="#fff" />
         </TouchableOpacity>
       </View>
 
+      {/* Investments List */}
       <ScrollView
+        ref={scrollViewRef}
         style={styles.content}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#10B981" />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
         {investments.length === 0 ? (
@@ -165,34 +256,43 @@ export default function InvestmentsScreen() {
                   <Text style={styles.cardDate}>{inv.date}</Text>
                   <Text style={styles.cardAmount}>₹{inv.amount.toLocaleString('en-IN')}</Text>
                   <Text style={styles.cardCategory}>{inv.category}</Text>
-                </View>
-                <View style={{ alignItems: 'flex-end' }}>
+                  {inv.notes && <Text style={styles.cardNotes}>"{inv.notes}"</Text>}
                   <Text style={styles.cardInvestor}>By {inv.investor}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TouchableOpacity
+                    onPress={() => handleEdit(inv)}
+                    style={styles.editIconButton}
+                  >
+                    <Ionicons name="create-outline" size={18} color="#3B82F6" />
+                  </TouchableOpacity>
                   <TouchableOpacity
                     onPress={() => handleDelete(inv._id)}
-                    style={{ marginTop: 8 }}
+                    style={styles.deleteIconButton}
                   >
-                    <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                    <Ionicons name="trash-outline" size={18} color="#EF4444" />
                   </TouchableOpacity>
                 </View>
               </View>
             </View>
           ))
         )}
-        <View style={{ height: 80 }} />
       </ScrollView>
 
+      {/* Add/Edit Modal */}
       <Modal
         visible={modalVisible}
         animationType="slide"
-        transparent
-        onRequestClose={() => setModalVisible(false)}
+        transparent={true}
+        onRequestClose={closeModal}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add Investment</Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
+              <Text style={styles.modalTitle}>
+                {editMode ? 'Edit Investment' : 'Add Investment'}
+              </Text>
+              <TouchableOpacity onPress={closeModal}>
                 <Ionicons name="close" size={24} color="#6B7280" />
               </TouchableOpacity>
             </View>
@@ -204,8 +304,8 @@ export default function InvestmentsScreen() {
                   style={styles.input}
                   value={amount}
                   onChangeText={setAmount}
-                  keyboardType="decimal-pad"
                   placeholder="Enter amount"
+                  keyboardType="numeric"
                 />
               </View>
 
@@ -248,15 +348,28 @@ export default function InvestmentsScreen() {
                 </View>
               </View>
 
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Notes (Optional)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={notes}
+                  onChangeText={setNotes}
+                  placeholder="Optional notes"
+                  multiline
+                />
+              </View>
+
               <TouchableOpacity
                 style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-                onPress={handleAddInvestment}
+                onPress={editMode ? handleUpdateInvestment : handleAddInvestment}
                 disabled={loading}
               >
                 {loading ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <Text style={styles.submitButtonText}>Add Investment</Text>
+                  <Text style={styles.submitButtonText}>
+                    {editMode ? 'Update Investment' : 'Add Investment'}
+                  </Text>
                 )}
               </TouchableOpacity>
             </ScrollView>
@@ -346,9 +459,26 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6B7280',
   },
+  cardNotes: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontStyle: 'italic',
+    marginTop: 4,
+  },
   cardInvestor: {
     fontSize: 12,
     color: '#6B7280',
+    marginTop: 4,
+  },
+  editIconButton: {
+    padding: 8,
+    backgroundColor: '#DBEAFE',
+    borderRadius: 8,
+  },
+  deleteIconButton: {
+    padding: 8,
+    backgroundColor: '#FEE2E2',
+    borderRadius: 8,
   },
   modalOverlay: {
     flex: 1,
@@ -360,7 +490,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
-    maxHeight: '80%',
+    maxHeight: '85%',
   },
   modalHeader: {
     flexDirection: 'row',
