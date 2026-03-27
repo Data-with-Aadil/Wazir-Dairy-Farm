@@ -47,7 +47,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const setupNotifications = async () => {
     // Dynamic import for expo-notifications
-    const Notifications = await import('expo-notifications');
+    const Notifications = await import('expo-notifications') as any;
 
     Notifications.setNotificationHandler({
       handleNotification: async () => ({
