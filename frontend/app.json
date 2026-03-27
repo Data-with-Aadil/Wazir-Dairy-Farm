@@ -1,22 +1,33 @@
 {
   "expo": {
-    "name": "frontend",
-    "slug": "frontend",
+    "name": "Wazir Dairy Farm",
+    "slug": "wazir-dairy-farm",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "frontend",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "notification": {
+      "icon": "./assets/images/notification-icon.png",
+      "color": "#10B981",
+      "androidMode": "default",
+      "androidCollapsedTitle": "Wazir Dairy Farm"
+    },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.wazirdairyfarm.app"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#000000"
+        "backgroundColor": "#10B981"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.wazirdairyfarm.app",
+      "permissions": [
+        "NOTIFICATIONS"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -26,12 +37,19 @@
     "plugins": [
       "expo-router",
       [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#10B981"
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#000000"
+          "backgroundColor": "#10B981"
         }
       ]
     ],
