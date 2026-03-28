@@ -14,15 +14,16 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LineChart, PieChart } from 'react-native-gifted-charts';
 import { Calendar } from 'react-native-calendars';
 import { useAuth } from '../../context/AuthContext';
 import { router, useFocusEffect } from 'expo-router';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 
-const BACKGROUND_IMAGE = 'https://customer-assets.emergentagent.com/job_2ded3f0f-8937-48e9-9afe-e862fe69dea1/artifacts/0vjmy7gj_1000044672.jpg';
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+const BACKGROUND_IMAGE = {
+  uri: "https://customer-assets.emergentagent.com/job_2ded3f0f-8937-48e9-9afe-e862fe69dea1/artifacts/0vjmy7gj_1000044672.jpg"
+};
+const BACKEND_URL = "https://wazir-dairy-farm.onrender.com";
 
 interface DashboardStats {
   total_investment: number;
@@ -67,11 +68,13 @@ export default function DashboardScreen() {
   const [selectedDate, setSelectedDate] = useState('');
   const [eventDescription, setEventDescription] = useState('');
   const [addingEvent, setAddingEvent] = useState(false);
-  const dashboardRef = React.useRef(null);
+  const scrollViewRef = React.useRef<ScrollView>(null);
 
-  // Auto-refresh when tab becomes focused
+  // Scroll to top when tab is focused
   useFocusEffect(
     React.useCallback(() => {
+      scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+      // Also refresh data when dashboard is focused
       fetchStats();
       fetchChartData();
       fetchDLS();
@@ -135,11 +138,11 @@ export default function DashboardScreen() {
         const now = new Date();
         const currentMonth = now.getMonth() + 1;
         const currentYear = now.getFullYear();
-        
+
         const currentMonthTotal = data
           .filter((dls: DLS) => dls.month === currentMonth && dls.year === currentYear)
           .reduce((sum: number, dls: DLS) => sum + dls.amount, 0);
-        
+
         setCurrentMonthDLS(currentMonthTotal);
       }
     } catch (error) {
@@ -216,79 +219,77 @@ export default function DashboardScreen() {
       setExporting(true);
 
       const html = `
-        <html>
-          <head>
-            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
-            <style>
-              body { font-family: 'Arial', sans-serif; padding: 20px; }
-              h1 { color: #10B981; text-align: center; }
-              .section { margin: 20px 0; padding: 15px; background: #f9f9f9; border-radius: 8px; }
-              .section-title { font-size: 16px; font-weight: bold; color: #333; margin-bottom: 10px; }
-              .metric { display: flex; justify-content: space-between; margin: 8px 0; }
-              .label { color: #666; }
-              .value { font-weight: bold; color: #333; }
-              .green { color: #10B981; }
-              .red { color: #EF4444; }
-              .blue { color: #3B82F6; }
-            </style>
-          </head>
-          <body>
-            <h1>Wazir Dairy Farming - Dashboard Report</h1>
-            <p style="text-align: center; color: #666;">Generated on ${new Date().toLocaleDateString()}</p>
-            
-            <div class="section">
-              <div class="section-title">Total Investment</div>
-              <div class="metric">
-                <span class="label">Total:</span>
-                <span class="value green">₹${stats?.total_investment.toLocaleString('en-IN') || '0'}</span>
-              </div>
-              <div class="metric">
-                <span class="label">Aadil:</span>
-                <span class="value">₹${stats?.aadil_investment.toLocaleString('en-IN') || '0'}</span>
-              </div>
-              <div class="metric">
-                <span class="label">Imran:</span>
-                <span class="value">₹${stats?.imran_investment.toLocaleString('en-IN') || '0'}</span>
-              </div>
-            </div>
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    h1 { color: #10B981; text-align: center; }
+    .section { margin: 20px 0; padding: 15px; border: 1px solid #E5E7EB; border-radius: 8px; }
+    .row { display: flex; justify-content: space-between; margin: 10px 0; }
+    .label { font-weight: bold; color: #6B7280; }
+    .value { color: #1F2937; }
+    .footer { text-align: center; margin-top: 40px; color: #9CA3AF; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <h1>Wazir Dairy Farming - Dashboard Report</h1>
+  <p style="text-align: center; color: #6B7280;">Generated on ${new Date().toLocaleDateString()}</p>
 
-            <div class="section">
-              <div class="section-title">Monthly Performance</div>
-              <div class="metric">
-                <span class="label">Earnings:</span>
-                <span class="value green">₹${stats?.total_earnings.toLocaleString('en-IN') || '0'}</span>
-              </div>
-              <div class="metric">
-                <span class="label">Expenditure:</span>
-                <span class="value red">₹${stats?.total_expenditure.toLocaleString('en-IN') || '0'}</span>
-              </div>
-              <div class="metric">
-                <span class="label">Net Profit:</span>
-                <span class="value ${(stats?.net_profit || 0) >= 0 ? 'green' : 'red'}">₹${stats?.net_profit.toLocaleString('en-IN') || '0'}</span>
-              </div>
-            </div>
+  <div class="section">
+    <h2>Total Investment</h2>
+    <div class="row">
+      <span class="label">Total:</span>
+      <span class="value">₹${stats?.total_investment.toLocaleString('en-IN') || '0'}</span>
+    </div>
+    <div class="row">
+      <span class="label">Aadil:</span>
+      <span class="value">₹${stats?.aadil_investment.toLocaleString('en-IN') || '0'}</span>
+    </div>
+    <div class="row">
+      <span class="label">Imran:</span>
+      <span class="value">₹${stats?.imran_investment.toLocaleString('en-IN') || '0'}</span>
+    </div>
+  </div>
 
-            <div class="section">
-              <div class="section-title">Dairy Lock Sales</div>
-              <div class="metric">
-                <span class="label">Total:</span>
-                <span class="value">₹${stats?.total_dls.toLocaleString('en-IN') || '0'}</span>
-              </div>
-              <div class="metric">
-                <span class="label">Current Month:</span>
-                <span class="value blue">₹${currentMonthDLS.toLocaleString('en-IN')}</span>
-              </div>
-            </div>
+  <div class="section">
+    <h2>Monthly Performance</h2>
+    <div class="row">
+      <span class="label">Earnings:</span>
+      <span class="value">₹${stats?.total_earnings.toLocaleString('en-IN') || '0'}</span>
+    </div>
+    <div class="row">
+      <span class="label">Expenditure:</span>
+      <span class="value">₹${stats?.total_expenditure.toLocaleString('en-IN') || '0'}</span>
+    </div>
+    <div class="row">
+      <span class="label">Net Profit:</span>
+      <span class="value">₹${stats?.net_profit.toLocaleString('en-IN') || '0'}</span>
+    </div>
+  </div>
 
-            <p style="text-align: center; margin-top: 30px; color: #999; font-size: 12px;">
-              Wazir Dairy Farming © 2026
-            </p>
-          </body>
-        </html>
+  <div class="section">
+    <h2>Dairy Lock Sales</h2>
+    <div class="row">
+      <span class="label">Total:</span>
+      <span class="value">₹${stats?.total_dls.toLocaleString('en-IN') || '0'}</span>
+    </div>
+    <div class="row">
+      <span class="label">Current Month:</span>
+      <span class="value">₹${currentMonthDLS.toLocaleString('en-IN')}</span>
+    </div>
+  </div>
+
+  <div class="footer">
+    <p>Wazir Dairy Farming © 2026</p>
+  </div>
+</body>
+</html>
       `;
 
       const { uri } = await Print.printToFileAsync({ html });
-      
+
       Alert.alert(
         'PDF Generated',
         'Dashboard report has been created. Would you like to share it?',
@@ -311,76 +312,14 @@ export default function DashboardScreen() {
     }
   };
 
-  // Prepare line chart data
-  const getLineChartData = () => {
-    const monthlyData: { [key: string]: { earnings: number; expenditure: number } } = {};
-
-    milkSales.forEach((sale) => {
-      const month = sale.date.substring(0, 7);
-      if (!monthlyData[month]) {
-        monthlyData[month] = { earnings: 0, expenditure: 0 };
-      }
-      monthlyData[month].earnings += sale.earnings;
-    });
-
-    expenditures.forEach((exp) => {
-      const month = exp.date.substring(0, 7);
-      if (!monthlyData[month]) {
-        monthlyData[month] = { earnings: 0, expenditure: 0 };
-      }
-      monthlyData[month].expenditure += exp.amount;
-    });
-
-    const sortedMonths = Object.keys(monthlyData).sort();
-    const recent = sortedMonths.slice(-6);
-
-    const earningsData = recent.map((month) => ({
-      value: Math.round(monthlyData[month].earnings / 1000), // Round to whole number (thousands)
-      label: month.substring(5),
-      dataPointText: `${Math.round(monthlyData[month].earnings / 1000)}k`,
-    }));
-
-    const expenditureData = recent.map((month) => ({
-      value: Math.round(monthlyData[month].expenditure / 1000), // Round to whole number
-    }));
-
-    return { earningsData, expenditureData };
-  };
-
-  const getPieChartData = () => {
-    if (!stats || stats.total_investment === 0) return [];
-
-    return [
-      {
-        value: stats.aadil_investment,
-        color: '#10B981',
-        text: `${((stats.aadil_investment / stats.total_investment) * 100).toFixed(0)}%`,
-        label: 'Aadil',
-      },
-      {
-        value: stats.imran_investment,
-        color: '#3B82F6',
-        text: `${((stats.imran_investment / stats.total_investment) * 100).toFixed(0)}%`,
-        label: 'Imran',
-      },
-    ];
-  };
-
-  const { earningsData, expenditureData } = getLineChartData();
-  const pieData = getPieChartData();
-
   return (
-    <ImageBackground
-      source={{ uri: BACKGROUND_IMAGE }}
-      style={styles.background}
-      blurRadius={50}
-    >
+    <ImageBackground source={BACKGROUND_IMAGE} style={styles.background} resizeMode="cover">
       <View style={styles.overlay}>
         <ScrollView
-          ref={dashboardRef}
+          ref={scrollViewRef}
           style={styles.container}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#10B981" />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
         >
           {/* Header */}
@@ -390,12 +329,8 @@ export default function DashboardScreen() {
               <Text style={styles.userName}>{user?.name}</Text>
             </View>
             <View style={styles.headerButtons}>
-              <TouchableOpacity
-                onPress={exportToPDF}
-                style={styles.exportButton}
-                disabled={exporting}
-              >
-                <Ionicons name="download-outline" size={20} color="#10B981" />
+              <TouchableOpacity onPress={exportToPDF} style={styles.exportButton}>
+                <Ionicons name="download-outline" size={24} color="#10B981" />
               </TouchableOpacity>
               <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
                 <Ionicons name="log-out-outline" size={24} color="#EF4444" />
@@ -425,17 +360,17 @@ export default function DashboardScreen() {
             <Text style={styles.cardTitle}>Monthly Performance</Text>
             <View style={styles.metricsRow}>
               <View style={styles.metricItem}>
-                <Ionicons name="trending-up" size={20} color="#10B981" />
+                <Ionicons name="trending-up" size={24} color="#10B981" />
                 <Text style={styles.metricLabel}>Earnings</Text>
                 <Text style={styles.metricValue}>₹{stats?.total_earnings.toLocaleString('en-IN') || '0'}</Text>
               </View>
               <View style={styles.metricItem}>
-                <Ionicons name="trending-down" size={20} color="#EF4444" />
+                <Ionicons name="trending-down" size={24} color="#EF4444" />
                 <Text style={styles.metricLabel}>Expenditure</Text>
                 <Text style={styles.metricValue}>₹{stats?.total_expenditure.toLocaleString('en-IN') || '0'}</Text>
               </View>
               <View style={styles.metricItem}>
-                <Ionicons name="cash" size={20} color="#3B82F6" />
+                <Ionicons name="cash" size={24} color="#3B82F6" />
                 <Text style={styles.metricLabel}>Net Profit</Text>
                 <Text style={[styles.metricValue, { color: (stats?.net_profit || 0) >= 0 ? '#10B981' : '#EF4444' }]}>
                   ₹{stats?.net_profit.toLocaleString('en-IN') || '0'}
@@ -459,94 +394,13 @@ export default function DashboardScreen() {
               </View>
               <View style={styles.dlsDivider} />
               <View style={styles.dlsItem}>
-                <Text style={styles.dlsLabel}>Net Profit</Text>
+                <Text style={styles.dlsLabel}>Actual Monthly Profit</Text>
                 <Text style={[styles.dlsNetProfit, { color: (currentMonthDLS - (stats?.total_expenditure || 0)) >= 0 ? '#10B981' : '#EF4444' }]}>
                   ₹{(currentMonthDLS - (stats?.total_expenditure || 0)).toLocaleString('en-IN')}
                 </Text>
               </View>
             </View>
           </View>
-
-          {/* Charts */}
-          {earningsData.length > 0 && (
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>Earnings vs Expenditure (Last 6 Months)</Text>
-              <View style={styles.chartContainer}>
-                <LineChart
-                  data={earningsData}
-                  data2={expenditureData}
-                  height={200}
-                  width={screenWidth - 80}
-                  spacing={50}
-                  initialSpacing={10}
-                  color1="#10B981"
-                  color2="#EF4444"
-                  textColor1="#10B981"
-                  dataPointsHeight={6}
-                  dataPointsWidth={6}
-                  dataPointsColor1="#10B981"
-                  dataPointsColor2="#EF4444"
-                  textShiftY={-8}
-                  textShiftX={-5}
-                  textFontSize={10}
-                  thickness={3}
-                  hideRules
-                  yAxisColor="#E5E7EB"
-                  xAxisColor="#E5E7EB"
-                  yAxisTextStyle={{ color: '#9CA3AF', fontSize: 10 }}
-                  xAxisLabelTextStyle={{ color: '#6B7280', fontSize: 10 }}
-                  curved
-                />
-                <View style={styles.legend}>
-                  <View style={styles.legendItem}>
-                    <View style={[styles.legendDot, { backgroundColor: '#10B981' }]} />
-                    <Text style={styles.legendText}>Earnings</Text>
-                  </View>
-                  <View style={styles.legendItem}>
-                    <View style={[styles.legendDot, { backgroundColor: '#EF4444' }]} />
-                    <Text style={styles.legendText}>Expenditure</Text>
-                  </View>
-                </View>
-              </View>
-            </View>
-          )}
-
-          {stats && stats.total_investment > 0 && (
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>Investment Distribution</Text>
-              <View style={styles.pieChartContainer}>
-                <PieChart
-                  data={pieData}
-                  radius={80}
-                  innerRadius={40}
-                  centerLabelComponent={() => (
-                    <View style={{ alignItems: 'center' }}>
-                      <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#1F2937' }}>Total</Text>
-                      <Text style={{ fontSize: 12, color: '#6B7280' }}>
-                        ₹{(stats.total_investment / 1000).toFixed(0)}k
-                      </Text>
-                    </View>
-                  )}
-                />
-                <View style={styles.pieLegend}>
-                  <View style={styles.pieLegendItem}>
-                    <View style={[styles.legendDot, { backgroundColor: '#10B981' }]} />
-                    <View>
-                      <Text style={styles.pieLegendLabel}>Aadil</Text>
-                      <Text style={styles.pieLegendValue}>₹{stats.aadil_investment.toLocaleString('en-IN')}</Text>
-                    </View>
-                  </View>
-                  <View style={styles.pieLegendItem}>
-                    <View style={[styles.legendDot, { backgroundColor: '#3B82F6' }]} />
-                    <View>
-                      <Text style={styles.pieLegendLabel}>Imran</Text>
-                      <Text style={styles.pieLegendValue}>₹{stats.imran_investment.toLocaleString('en-IN')}</Text>
-                    </View>
-                  </View>
-                </View>
-              </View>
-            </View>
-          )}
 
           {/* Event Calendar */}
           <View style={styles.card}>
@@ -556,10 +410,9 @@ export default function DashboardScreen() {
                 onPress={() => setEventModalVisible(true)}
                 style={styles.addEventButton}
               >
-                <Ionicons name="add" size={24} color="#fff" />
+                <Ionicons name="add" size={20} color="#fff" />
               </TouchableOpacity>
             </View>
-
             <Calendar
               markedDates={{
                 ...events.reduce((acc: any, event: any) => {
@@ -617,15 +470,13 @@ export default function DashboardScreen() {
               ))}
             </View>
           </View>
-
-          <View style={{ height: 40 }} />
         </ScrollView>
 
         {/* Event Add Modal */}
         <Modal
           visible={eventModalVisible}
           animationType="slide"
-          transparent
+          transparent={true}
           onRequestClose={() => setEventModalVisible(false)}
         >
           <View style={styles.modalOverlay}>
@@ -642,9 +493,7 @@ export default function DashboardScreen() {
               </View>
 
               <View style={styles.formGroup}>
-                <Text style={styles.label}>
-                  Event Description ({eventDescription.length}/15)
-                </Text>
+                <Text style={styles.label}>Event Description ({eventDescription.length}/15)</Text>
                 <TextInput
                   style={styles.input}
                   value={eventDescription}
@@ -725,14 +574,14 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   cardTitle: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
-    color: '#6B7280',
-    marginBottom: 8,
+    color: '#374151',
+    marginBottom: 10,
   },
   mainValue: {
-    fontSize: 32,
-    fontWeight: 'bold',
+    fontSize: 24,
+    fontWeight: '700',
     color: '#10B981',
   },
   divider: {
@@ -753,14 +602,14 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   statValue: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
-    color: '#1F2937',
+    color: '#111827',
   },
   metricsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 8,
+    marginTop: 12,
   },
   metricItem: {
     alignItems: 'center',
@@ -799,66 +648,18 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   dlsMonthValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontWeight: '600',
     color: '#3B82F6',
   },
-  chartContainer: {
-    marginTop: 16,
-    alignItems: 'center',
-  },
-  legend: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 24,
-    marginTop: 16,
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  legendDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-  },
-  legendText: {
-    fontSize: 12,
-    color: '#6B7280',
-    fontWeight: '500',
-  },
-  pieChartContainer: {
-    alignItems: 'center',
-    marginTop: 16,
-  },
-  pieLegend: {
-    marginTop: 24,
-    gap: 12,
-  },
-  pieLegendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  pieLegendLabel: {
-    fontSize: 14,
-    color: '#6B7280',
-    fontWeight: '500',
-  },
-  pieLegendValue: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1F2937',
-  },
   dlsValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontWeight: '600',
     color: '#10B981',
   },
   dlsNetProfit: {
-    fontSize: 24,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontWeight: '600',
   },
   calendarHeader: {
     flexDirection: 'row',

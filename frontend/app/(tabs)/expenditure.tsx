@@ -10,12 +10,15 @@ import {
   Alert,
   RefreshControl,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
 import { useAuth } from '../../context/AuthContext';
+import { useFocusEffect } from 'expo-router';
 
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+const BACKEND_URL = "https://wazir-dairy-farm.onrender.com";
 
 const CATEGORIES = {
   Supplements: [
@@ -65,6 +68,11 @@ export default function ExpenditureScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const scrollViewRef = React.useRef<ScrollView>(null);
+
+  // Edit mode states
+  const [editMode, setEditMode] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   // Form fields
   const [amount, setAmount] = useState('');
@@ -73,6 +81,13 @@ export default function ExpenditureScreen() {
   const [category, setCategory] = useState('Supplements');
   const [subcategory, setSubcategory] = useState('Mineral Mixture');
   const [notes, setNotes] = useState('');
+
+  // Scroll to top when tab is focused
+  useFocusEffect(
+    React.useCallback(() => {
+      scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+    }, [])
+  );
 
   useEffect(() => {
     fetchExpenditures();
@@ -103,7 +118,7 @@ export default function ExpenditureScreen() {
     }
 
     const amt = parseFloat(amount);
-    if (isNaN(amt)) {
+    if (isNaN(amt) || amt <= 0) {
       Alert.alert('Error', 'Please enter valid amount');
       return;
     }
@@ -136,23 +151,87 @@ export default function ExpenditureScreen() {
     }
   };
 
+  const handleEdit = (expenditure: Expenditure) => {
+    setEditMode(true);
+    setEditingId(expenditure._id);
+    setAmount(expenditure.amount.toString());
+    setDate(expenditure.date);
+    setPaidBy(expenditure.paid_by);
+    setCategory(expenditure.category);
+    setSubcategory(expenditure.subcategory);
+    setNotes(expenditure.notes || '');
+    setModalVisible(true);
+  };
+
+  const handleUpdateExpenditure = async () => {
+    if (!amount || !editingId) {
+      Alert.alert('Error', 'Please enter amount');
+      return;
+    }
+
+    const amt = parseFloat(amount);
+    if (isNaN(amt) || amt <= 0) {
+      Alert.alert('Error', 'Please enter valid amount');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/expenditures/${editingId}?user=${user?.name}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: amt,
+          date,
+          paid_by: paidBy,
+          category,
+          subcategory,
+          notes: notes.trim() || undefined,
+        }),
+      });
+
+      if (response.ok) {
+        Alert.alert('Success', 'Expenditure updated successfully');
+        setModalVisible(false);
+        setEditMode(false);
+        setEditingId(null);
+        resetForm();
+        fetchExpenditures();
+      } else {
+        const data = await response.json();
+        Alert.alert('Error', data?.detail || 'Update failed');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update expenditure');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleDelete = async (id: string) => {
-    Alert.alert('Delete Entry', 'Are you sure you want to delete this entry?', [
+    if (!user?.name) {
+      Alert.alert('Error', 'User not found');
+      return;
+    }
+
+    Alert.alert('Delete Entry', 'Are you sure?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
         style: 'destructive',
         onPress: async () => {
           try {
-            const response = await fetch(
-              `${BACKEND_URL}/api/expenditures/${id}?user=${user?.name}`,
-              { method: 'DELETE' }
-            );
-            if (response.ok) {
+            const url = `${BACKEND_URL}/api/expenditures/${id}?user=${user.name}`;
+            const res = await fetch(url, { method: 'DELETE' });
+            if (res.ok) {
+              Alert.alert('Deleted', 'Entry deleted successfully');
               fetchExpenditures();
+            } else {
+              const data = await res.json();
+              Alert.alert('Error', data?.detail || 'Delete failed');
             }
-          } catch (error) {
-            Alert.alert('Error', 'Failed to delete entry');
+          } catch (err) {
+            Alert.alert('Error', 'Failed to delete');
           }
         },
       },
@@ -164,27 +243,38 @@ export default function ExpenditureScreen() {
     setDate(new Date().toISOString().split('T')[0]);
     setPaidBy(user?.name || 'Aadil');
     setCategory('Supplements');
-    setSubcategory('Mineral Mixture');
+    setSubcategory(CATEGORIES['Supplements'][0]);
+    setNotes('');
+  };
+
+  const closeModal = () => {
+    setModalVisible(false);
+    setEditMode(false);
+    setEditingId(null);
+    resetForm();
   };
 
   return (
     <View style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Expenditure</Text>
-        <TouchableOpacity style={styles.addButton} onPress={() => setModalVisible(true)}>
+        <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.addButton}>
           <Ionicons name="add" size={24} color="#fff" />
         </TouchableOpacity>
       </View>
 
+      {/* Expenditures List */}
       <ScrollView
+        ref={scrollViewRef}
         style={styles.content}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#10B981" />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
         {expenditures.length === 0 ? (
           <View style={styles.emptyState}>
-            <Ionicons name="cash-outline" size={64} color="#D1D5DB" />
+            <Ionicons name="receipt-outline" size={64} color="#D1D5DB" />
             <Text style={styles.emptyText}>No expenditures yet</Text>
             <Text style={styles.emptySubtext}>Tap + to add your first entry</Text>
           </View>
@@ -198,34 +288,46 @@ export default function ExpenditureScreen() {
                   <Text style={styles.cardCategory}>
                     {exp.category} • {exp.subcategory}
                   </Text>
-                </View>
-                <View style={{ alignItems: 'flex-end' }}>
+                  {exp.notes && <Text style={styles.cardNotes}>"{exp.notes}"</Text>}
                   <Text style={styles.cardPaidBy}>Paid by {exp.paid_by}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TouchableOpacity
+                    onPress={() => handleEdit(exp)}
+                    style={styles.editIconButton}
+                  >
+                    <Ionicons name="create-outline" size={18} color="#3B82F6" />
+                  </TouchableOpacity>
                   <TouchableOpacity
                     onPress={() => handleDelete(exp._id)}
-                    style={{ marginTop: 8 }}
+                    style={styles.deleteIconButton}
                   >
-                    <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                    <Ionicons name="trash-outline" size={18} color="#EF4444" />
                   </TouchableOpacity>
                 </View>
               </View>
             </View>
           ))
         )}
-        <View style={{ height: 80 }} />
       </ScrollView>
 
+      {/* Add/Edit Modal */}
       <Modal
         visible={modalVisible}
         animationType="slide"
-        transparent
-        onRequestClose={() => setModalVisible(false)}
+        transparent={true}
+        onRequestClose={closeModal}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add Expenditure</Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
+              <Text style={styles.modalTitle}>
+                {editMode ? 'Edit Expenditure' : 'Add Expenditure'}
+              </Text>
+              <TouchableOpacity onPress={closeModal}>
                 <Ionicons name="close" size={24} color="#6B7280" />
               </TouchableOpacity>
             </View>
@@ -237,8 +339,8 @@ export default function ExpenditureScreen() {
                   style={styles.input}
                   value={amount}
                   onChangeText={setAmount}
-                  keyboardType="decimal-pad"
                   placeholder="Enter amount"
+                  keyboardType="numeric"
                 />
               </View>
 
@@ -253,27 +355,14 @@ export default function ExpenditureScreen() {
               </View>
 
               <View style={styles.formGroup}>
-                <Text style={styles.label}>Paid By</Text>
-                <View style={styles.pickerContainer}>
-                  <Picker
-                    selectedValue={paidBy}
-                    onValueChange={(value) => setPaidBy(value)}
-                    style={styles.picker}
-                  >
-                    <Picker.Item label="Aadil" value="Aadil" />
-                    <Picker.Item label="Imran" value="Imran" />
-                  </Picker>
-                </View>
-              </View>
-
-              <View style={styles.formGroup}>
                 <Text style={styles.label}>Category</Text>
                 <View style={styles.pickerContainer}>
                   <Picker
                     selectedValue={category}
                     onValueChange={(value) => {
-                      setCategory(value);
-                      setSubcategory(CATEGORIES[value as keyof typeof CATEGORIES][0]);
+                      const cat = value as keyof typeof CATEGORIES;
+                      setCategory(cat);
+                      setSubcategory(CATEGORIES[cat][0]);
                     }}
                     style={styles.picker}
                   >
@@ -289,30 +378,43 @@ export default function ExpenditureScreen() {
                 <View style={styles.pickerContainer}>
                   <Picker
                     selectedValue={subcategory}
-                    onValueChange={(value) => setSubcategory(value)}
+                    onValueChange={(value) => setSubcategory(value as string)}
                     style={styles.picker}
                   >
-                    {CATEGORIES[category as keyof typeof CATEGORIES].map((subcat) => (
+                    {CATEGORIES[category as keyof typeof CATEGORIES]?.map((subcat) => (
                       <Picker.Item key={subcat} label={subcat} value={subcat} />
                     ))}
                   </Picker>
                 </View>
               </View>
 
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Notes</Text>
+                <TextInput
+                  style={styles.input}
+                  value={notes}
+                  onChangeText={setNotes}
+                  placeholder="Optional notes"
+                  multiline
+                />
+              </View>
+
               <TouchableOpacity
                 style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-                onPress={handleAddExpenditure}
+                onPress={editMode ? handleUpdateExpenditure : handleAddExpenditure}
                 disabled={loading}
               >
                 {loading ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <Text style={styles.submitButtonText}>Add Expenditure</Text>
+                  <Text style={styles.submitButtonText}>
+                    {editMode ? 'Update Expenditure' : 'Add Expenditure'}
+                  </Text>
                 )}
               </TouchableOpacity>
             </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -351,32 +453,16 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
   },
-  emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 100,
-  },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#6B7280',
-    marginTop: 16,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#9CA3AF',
-    marginTop: 8,
-  },
   card: {
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
+    elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
-    elevation: 2,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -397,9 +483,42 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6B7280',
   },
+  cardNotes: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontStyle: 'italic',
+    marginTop: 4,
+  },
   cardPaidBy: {
     fontSize: 12,
     color: '#6B7280',
+    marginTop: 4,
+  },
+  editIconButton: {
+    padding: 8,
+    backgroundColor: '#DBEAFE',
+    borderRadius: 8,
+  },
+  deleteIconButton: {
+    padding: 8,
+    backgroundColor: '#FEE2E2',
+    borderRadius: 8,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 100,
+  },
+  emptyText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#6B7280',
+    marginTop: 16,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    marginTop: 8,
   },
   modalOverlay: {
     flex: 1,

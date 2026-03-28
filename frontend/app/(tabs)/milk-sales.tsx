@@ -13,8 +13,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
+import { useFocusEffect } from 'expo-router';
 
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+const BACKEND_URL = "https://wazir-dairy-farm.onrender.com";
 
 interface MilkSale {
   _id: string;
@@ -32,12 +33,24 @@ export default function MilkSalesScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const scrollViewRef = React.useRef<ScrollView>(null);
+
+  // Edit mode states
+  const [editMode, setEditMode] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   // Form fields
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [volume, setVolume] = useState('');
   const [fatPercentage, setFatPercentage] = useState('');
   const [rate, setRate] = useState('8.4');
+
+  // Scroll to top when tab is focused
+  useFocusEffect(
+    React.useCallback(() => {
+      scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+    }, [])
+  );
 
   useEffect(() => {
     fetchSales();
@@ -105,6 +118,64 @@ export default function MilkSalesScreen() {
     }
   };
 
+  const handleEdit = (sale: MilkSale) => {
+    setEditMode(true);
+    setEditingId(sale._id);
+    setDate(sale.date);
+    setVolume(sale.volume.toString());
+    setFatPercentage(sale.fat_percentage.toString());
+    setRate(sale.rate.toString());
+    setModalVisible(true);
+  };
+
+  const handleUpdateSale = async () => {
+    if (!volume || !fatPercentage || !rate || !editingId) {
+      Alert.alert('Error', 'Please fill all fields');
+      return;
+    }
+
+    const vol = parseFloat(volume);
+    const fat = parseFloat(fatPercentage);
+    const r = parseFloat(rate);
+
+    if (isNaN(vol) || isNaN(fat) || isNaN(r)) {
+      Alert.alert('Error', 'Please enter valid numbers');
+      return;
+    }
+
+    const earnings = r * fat * vol;
+
+    setLoading(true);
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/milk-sales/${editingId}?user=${user?.name}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          date,
+          volume: vol,
+          fat_percentage: fat,
+          rate: r,
+          earnings,
+        }),
+      });
+
+      if (response.ok) {
+        Alert.alert('Success', 'Milk sale updated successfully');
+        setModalVisible(false);
+        setEditMode(false);
+        setEditingId(null);
+        resetForm();
+        fetchSales();
+      } else {
+        Alert.alert('Error', 'Update failed');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update milk sale');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleDelete = async (id: string) => {
     Alert.alert('Delete Entry', 'Are you sure you want to delete this entry?', [
       { text: 'Cancel', style: 'cancel' },
@@ -134,6 +205,13 @@ export default function MilkSalesScreen() {
     setRate('8.4');
   };
 
+  const closeModal = () => {
+    setModalVisible(false);
+    setEditMode(false);
+    setEditingId(null);
+    resetForm();
+  };
+
   const calculateEarnings = () => {
     const vol = parseFloat(volume) || 0;
     const fat = parseFloat(fatPercentage) || 0;
@@ -146,19 +224,17 @@ export default function MilkSalesScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Milk Sales</Text>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => setModalVisible(true)}
-        >
+        <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.addButton}>
           <Ionicons name="add" size={24} color="#fff" />
         </TouchableOpacity>
       </View>
 
       {/* Sales List */}
       <ScrollView
+        ref={scrollViewRef}
         style={styles.content}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#10B981" />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
         {sales.length === 0 ? (
@@ -171,13 +247,18 @@ export default function MilkSalesScreen() {
           sales.map((sale) => (
             <View key={sale._id} style={styles.card}>
               <View style={styles.cardHeader}>
-                <View>
+                <View style={{ flex: 1 }}>
                   <Text style={styles.cardDate}>{sale.date}</Text>
                   <Text style={styles.cardAmount}>₹{sale.earnings.toLocaleString('en-IN')}</Text>
                 </View>
-                <TouchableOpacity onPress={() => handleDelete(sale._id)}>
-                  <Ionicons name="trash-outline" size={20} color="#EF4444" />
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TouchableOpacity onPress={() => handleEdit(sale)} style={styles.editButton}>
+                    <Ionicons name="create-outline" size={20} color="#3B82F6" />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => handleDelete(sale._id)}>
+                    <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                  </TouchableOpacity>
+                </View>
               </View>
               <View style={styles.cardDetails}>
                 <View style={styles.detailItem}>
@@ -196,21 +277,22 @@ export default function MilkSalesScreen() {
             </View>
           ))
         )}
-        <View style={{ height: 80 }} />
       </ScrollView>
 
-      {/* Add Modal */}
+      {/* Add/Edit Modal */}
       <Modal
         visible={modalVisible}
         animationType="slide"
-        transparent
-        onRequestClose={() => setModalVisible(false)}
+        transparent={true}
+        onRequestClose={closeModal}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add Milk Sale</Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
+              <Text style={styles.modalTitle}>
+                {editMode ? 'Edit Milk Sale' : 'Add Milk Sale'}
+              </Text>
+              <TouchableOpacity onPress={closeModal}>
                 <Ionicons name="close" size={24} color="#6B7280" />
               </TouchableOpacity>
             </View>
@@ -232,8 +314,8 @@ export default function MilkSalesScreen() {
                   style={styles.input}
                   value={volume}
                   onChangeText={setVolume}
-                  keyboardType="decimal-pad"
                   placeholder="Enter volume"
+                  keyboardType="numeric"
                 />
               </View>
 
@@ -243,8 +325,8 @@ export default function MilkSalesScreen() {
                   style={styles.input}
                   value={fatPercentage}
                   onChangeText={setFatPercentage}
-                  keyboardType="decimal-pad"
                   placeholder="Enter fat %"
+                  keyboardType="numeric"
                 />
               </View>
 
@@ -254,8 +336,8 @@ export default function MilkSalesScreen() {
                   style={styles.input}
                   value={rate}
                   onChangeText={setRate}
-                  keyboardType="decimal-pad"
-                  placeholder="8.4"
+                  placeholder="Enter rate"
+                  keyboardType="numeric"
                 />
               </View>
 
@@ -268,13 +350,15 @@ export default function MilkSalesScreen() {
 
               <TouchableOpacity
                 style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-                onPress={handleAddSale}
+                onPress={editMode ? handleUpdateSale : handleAddSale}
                 disabled={loading}
               >
                 {loading ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <Text style={styles.submitButtonText}>Add Sale</Text>
+                  <Text style={styles.submitButtonText}>
+                    {editMode ? 'Update Sale' : 'Add Sale'}
+                  </Text>
                 )}
               </TouchableOpacity>
             </ScrollView>
@@ -380,6 +464,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#1F2937',
+  },
+  editButton: {
+    padding: 4,
   },
   modalOverlay: {
     flex: 1,

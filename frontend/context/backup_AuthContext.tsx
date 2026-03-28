@@ -1,7 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
+import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
+import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
 const BACKEND_URL = "https://wazir-dairy-farm.onrender.com";
@@ -23,18 +25,41 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Configure notifications
+// Notifications.setNotificationHandler({
+//   handleNotification: async () => ({
+//     shouldShowAlert: true,
+//     shouldPlaySound: true,
+//     shouldSetBadge: true,
+//   }),
+// });
+if (Platform.OS !== 'web') {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+    }),
+  });
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isOnline, setIsOnline] = useState(true);
   const [expoPushToken, setExpoPushToken] = useState<string>('');
 
+  // useEffect(() => {
+  //   loadUser();
+  //   setupNetworkListener();
+  //   registerForPushNotifications();
+  // }, []);
+
   useEffect(() => {
     loadUser();
     setupNetworkListener();
-
+  
     if (Platform.OS !== 'web') {
-      setupNotifications();
       registerForPushNotifications();
     }
   }, []);
@@ -45,19 +70,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isOnline]);
 
-  const setupNotifications = async () => {
-    // Dynamic import for expo-notifications
-    const Notifications = await import('expo-notifications') as any;
-
-    Notifications.setNotificationHandler({
-      handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldPlaySound: true,
-        shouldSetBadge: true,
-      }),
-    });
-  };
-
   const setupNetworkListener = () => {
     const unsubscribe = NetInfo.addEventListener(state => {
       setIsOnline(state.isConnected ?? false);
@@ -66,10 +78,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const registerForPushNotifications = async () => {
-    if (Platform.OS === 'web') return;
-
-    const Notifications = await import('expo-notifications');
-
     if (!Device.isDevice) {
       console.log('Push notifications only work on physical devices');
       return;
@@ -85,14 +93,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (finalStatus !== 'granted') {
-        console.log('Failed to get push token');
+        console.log('Failed to get push token for push notifications');
         return;
       }
 
-      const token = await Notifications.getExpoPushTokenAsync();
+      const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+      const token = await Notifications.getExpoPushTokenAsync({ projectId });
       setExpoPushToken(token.data);
     } catch (error) {
-      console.error('Push token error:', error);
+      console.error('Error getting push token:', error);
     }
   };
 
@@ -100,10 +109,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const userData = await AsyncStorage.getItem('user');
       if (userData) {
-        setUser(JSON.parse(userData));
+        const parsedUser = JSON.parse(userData);
+        setUser(parsedUser);
       }
     } catch (error) {
-      console.error('Load user error:', error);
+      console.error('Error loading user:', error);
     } finally {
       setIsLoading(false);
     }
@@ -122,16 +132,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await AsyncStorage.setItem('user', JSON.stringify(data.user));
         setUser(data.user);
 
+        // Update push token in backend
         if (expoPushToken) {
           await fetch(`${BACKEND_URL}/api/auth/update-push-token`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              name,
-              expo_push_token: expoPushToken,
-            }),
+            body: JSON.stringify({ name, expo_push_token: expoPushToken }),
           });
         }
+
         return true;
       }
       return false;
@@ -153,7 +162,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       queue.push({ ...operation, timestamp: Date.now() });
       await AsyncStorage.setItem('operationQueue', JSON.stringify(queue));
     } catch (error) {
-      console.error('Queue error:', error);
+      console.error('Error queuing operation:', error);
     }
   };
 
@@ -165,6 +174,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const queue = JSON.parse(queueData);
       if (queue.length === 0) return;
 
+      console.log(`Processing ${queue.length} pending operations...`);
+
       for (const operation of queue) {
         try {
           await fetch(`${BACKEND_URL}${operation.endpoint}`, {
@@ -173,13 +184,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             body: operation.body ? JSON.stringify(operation.body) : undefined,
           });
         } catch (error) {
-          console.error('Process op error:', error);
+          console.error('Error processing operation:', error);
         }
       }
 
+      // Clear queue after processing
       await AsyncStorage.setItem('operationQueue', JSON.stringify([]));
     } catch (error) {
-      console.error('Queue process error:', error);
+      console.error('Error processing pending operations:', error);
     }
   };
 
