@@ -51,10 +51,17 @@
           "resizeMode": "contain",
           "backgroundColor": "#10B981"
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "1b758208-fbd5-44ae-a860-d75e4cce3809"
+      }
     }
   }
 }
