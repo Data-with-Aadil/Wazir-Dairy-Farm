@@ -1,8 +1,13 @@
+File: /app/(tabs)/_layout.tsx
+
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { View, Text, StyleSheet } from 'react-native';
+import { Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function TabLayout() {
+  const insets = useSafeAreaInsets();
+
   return (
     <Tabs
       screenOptions={{
@@ -13,8 +18,8 @@ export default function TabLayout() {
           backgroundColor: '#fff',
           borderTopWidth: 1,
           borderTopColor: '#E5E7EB',
-          height: 60,
-          paddingBottom: 8,
+          height: 60 + (Platform.OS === 'android' ? insets.bottom : 0),
+          paddingBottom: Platform.OS === 'android' ? insets.bottom + 8 : 8,
           paddingTop: 8,
         },
         tabBarLabelStyle: {
@@ -75,7 +80,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="notifications" size={size} color={color} />
           ),
-          tabBarBadge: undefined, // Will add unread count later
+          tabBarBadge: undefined,
         }}
       />
     </Tabs>
