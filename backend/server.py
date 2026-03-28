@@ -13,6 +13,9 @@ import httpx
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
+# 🆕 FEEDBACK #16: Import email reports module
+from email_reports import setup_email_scheduler
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
@@ -40,13 +43,13 @@ async def send_push_notification(from_user: str, title: str, body: str, data: Di
     try:
         other_user = "Imran" if from_user == "Aadil" else "Aadil"
         user_doc = await db.users.find_one({"name": other_user})
-
+        
         if not user_doc or not user_doc.get("expo_push_token"):
             logging.info(f"No push token for {other_user}")
             return
-
+        
         push_token = user_doc["expo_push_token"]
-
+        
         payload = {
             "to": push_token,
             "title": title,
@@ -56,7 +59,7 @@ async def send_push_notification(from_user: str, title: str, body: str, data: Di
             "priority": "high",
             "channelId": "default",
         }
-
+        
         async with httpx.AsyncClient() as client_http:
             response = await client_http.post(
                 'https://exp.host/--/api/v2/push/send',
@@ -74,13 +77,13 @@ async def check_event_reminders():
     try:
         today = datetime.now().date().isoformat()
         logging.info(f"Checking event reminders for {today}")
-
+        
         # Find events with reminder_date matching today
         events = await db.events.find({
             "reminder_date": today,
             "deleted": False
         }).to_list(1000)
-
+        
         for event in events:
             title = "Event Reminder"
             body = f"Upcoming event: {event['description']} on {event['date']}"
@@ -89,7 +92,7 @@ async def check_event_reminders():
                 "type": "event_reminder",
                 "event_id": str(event["_id"])
             }
-
+            
             # Create notification in DB
             notif = Notification(
                 type="event_reminder",
@@ -97,7 +100,7 @@ async def check_event_reminders():
                 message=body
             )
             await db.notifications.insert_one(notif.dict())
-
+            
             # Send push to both users
             for user_name in ["Aadil", "Imran"]:
                 user_doc = await db.users.find_one({"name": user_name})
@@ -117,7 +120,7 @@ async def check_event_reminders():
                         )
             
             logging.info(f"Reminder sent for event: {event['description']}")
-
+    
     except Exception as e:
         logging.error(f"Error checking reminders: {e}")
 
@@ -158,7 +161,7 @@ class Expenditure(BaseModel):
 
 class MilkSale(BaseModel):
     date: str
-    volume: float # liters
+    volume: float  # liters
     fat_percentage: float
     rate: float = 8.4
     earnings: float
@@ -175,17 +178,17 @@ class DairyLockSale(BaseModel):
     created_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
 
 class Notification(BaseModel):
-    type: str # 'investment', 'expenditure', 'milk_sale', 'dls', 'deletion', 'event_reminder'
+    type: str  # 'investment', 'expenditure', 'milk_sale', 'dls', 'deletion', 'event_reminder'
     data: Dict[str, Any]
     message: str
     read_by: List[str] = []
-    reactions: Dict[str, str] = {} # {user: emoji}
+    reactions: Dict[str, str] = {}  # {user: emoji}
     created_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
 
 # FEEDBACK #6: Updated CalendarEvent model with reminder fields
 class CalendarEvent(BaseModel):
-    date: str # YYYY-MM-DD format
-    description: str # max 15 chars
+    date: str  # YYYY-MM-DD format
+    description: str  # max 15 chars
     created_by: str
     reminder: Optional[str] = None  # '15_days', '1_month', '3_months', '6_months', '1_year'
     reminder_date: Optional[str] = None  # Calculated date when reminder should trigger
@@ -216,7 +219,7 @@ async def setup_users():
     existing = await db.users.count_documents({})
     if existing > 0:
         return {"message": "Users already set up"}
-
+    
     # Create default users
     users = [
         {"name": "Aadil", "pin": "1234", "phone": "+919340482240", "expo_push_token": None},
@@ -246,7 +249,7 @@ async def create_investment(investment: Investment):
         message=f"{investment.investor} added Investment - {investment.category} - ₹{investment.amount:,.0f} on {investment.date}"
     )
     await db.notifications.insert_one(notif.dict())
-
+    
     # FEEDBACK #5: Send push notification to other user
     await send_push_notification(
         investment.investor,
@@ -254,7 +257,7 @@ async def create_investment(investment: Investment):
         f"{investment.investor} added Investment - {investment.category} - ₹{investment.amount:,.0f}",
         {"screen": "wrx", "type": "investment"}
     )
-
+    
     return {"success": True, "id": str(result.inserted_id)}
 
 @api_router.put("/investments/{investment_id}")
@@ -291,12 +294,12 @@ async def delete_investment(investment_id: str, user: str):
     inv = await db.investments.find_one({"_id": ObjectId(investment_id)})
     if not inv:
         raise HTTPException(status_code=404, detail="Investment not found")
-
+    
     await db.investments.update_one(
         {"_id": ObjectId(investment_id)},
         {"$set": {"deleted": True}}
     )
-
+    
     # Create deletion notification
     notif = Notification(
         type="deletion",
@@ -304,7 +307,7 @@ async def delete_investment(investment_id: str, user: str):
         message=f"{user} removed Investment entry - {inv['category']} - ₹{inv['amount']:,.0f} on {inv['date']}"
     )
     await db.notifications.insert_one(notif.dict())
-
+    
     # FEEDBACK #5: Send push notification
     await send_push_notification(
         user,
@@ -312,7 +315,7 @@ async def delete_investment(investment_id: str, user: str):
         f"{user} removed Investment - {inv['category']} - ₹{inv['amount']:,.0f}",
         {"screen": "wrx", "type": "deletion"}
     )
-
+    
     return {"success": True}
 
 # ==================== EXPENDITURE ENDPOINTS ====================
@@ -327,7 +330,7 @@ async def create_expenditure(expenditure: Expenditure):
         message=f"{expenditure.paid_by} added Expenditure - {expenditure.category}/{expenditure.subcategory} - ₹{expenditure.amount:,.0f} on {expenditure.date}"
     )
     await db.notifications.insert_one(notif.dict())
-
+    
     # FEEDBACK #5: Send push notification
     await send_push_notification(
         expenditure.paid_by,
@@ -335,7 +338,7 @@ async def create_expenditure(expenditure: Expenditure):
         f"{expenditure.paid_by} added Expenditure - {expenditure.category}/{expenditure.subcategory} - ₹{expenditure.amount:,.0f}",
         {"screen": "wrx", "type": "expenditure"}
     )
-
+    
     return {"success": True, "id": str(result.inserted_id)}
 
 @api_router.get("/expenditures")
@@ -348,12 +351,12 @@ async def update_expenditure(expenditure_id: str, expenditure: Expenditure, user
     exp = await db.expenditures.find_one({"_id": ObjectId(expenditure_id)})
     if not exp:
         raise HTTPException(status_code=404, detail="Expenditure not found")
-
+    
     await db.expenditures.update_one(
         {"_id": ObjectId(expenditure_id)},
         {"$set": expenditure.dict(exclude_unset=True)}
     )
-
+    
     # Create update notification
     notif = Notification(
         type="expenditure",
@@ -361,7 +364,7 @@ async def update_expenditure(expenditure_id: str, expenditure: Expenditure, user
         message=f"{user} updated Expenditure - {expenditure.category}/{expenditure.subcategory} - ₹{expenditure.amount:,.0f} on {expenditure.date}"
     )
     await db.notifications.insert_one(notif.dict())
-
+    
     # FEEDBACK #5: Send push notification to other user
     await send_push_notification(
         user,
@@ -369,7 +372,7 @@ async def update_expenditure(expenditure_id: str, expenditure: Expenditure, user
         f"{user} updated Expenditure - {expenditure.category}/{expenditure.subcategory} - ₹{expenditure.amount:,.0f}",
         {"screen": "wrx", "type": "expenditure"}
     )
-
+    
     return {"success": True}
 
 @api_router.delete("/expenditures/{expenditure_id}")
@@ -377,12 +380,12 @@ async def delete_expenditure(expenditure_id: str, user: str):
     exp = await db.expenditures.find_one({"_id": ObjectId(expenditure_id)})
     if not exp:
         raise HTTPException(status_code=404, detail="Expenditure not found")
-
+    
     await db.expenditures.update_one(
         {"_id": ObjectId(expenditure_id)},
         {"$set": {"deleted": True}}
     )
-
+    
     # Create deletion notification
     notif = Notification(
         type="deletion",
@@ -390,7 +393,7 @@ async def delete_expenditure(expenditure_id: str, user: str):
         message=f"{user} removed Expenditure entry - {exp['category']}/{exp['subcategory']} - ₹{exp['amount']:,.0f} on {exp['date']}"
     )
     await db.notifications.insert_one(notif.dict())
-
+    
     # FEEDBACK #5: Send push notification
     await send_push_notification(
         user,
@@ -398,7 +401,7 @@ async def delete_expenditure(expenditure_id: str, user: str):
         f"{user} removed Expenditure - {exp['category']}/{exp['subcategory']} - ₹{exp['amount']:,.0f}",
         {"screen": "wrx", "type": "deletion"}
     )
-
+    
     return {"success": True}
 
 # ==================== MILK SALES ENDPOINTS ====================
@@ -434,12 +437,12 @@ async def update_milk_sale(sale_id: str, sale: MilkSale, user: str):
     existing_sale = await db.milk_sales.find_one({"_id": ObjectId(sale_id)})
     if not existing_sale:
         raise HTTPException(status_code=404, detail="Milk sale not found")
-
+    
     await db.milk_sales.update_one(
         {"_id": ObjectId(sale_id)},
         {"$set": sale.dict(exclude_unset=True)}
     )
-
+    
     # Create update notification
     notif = Notification(
         type="milk_sale",
@@ -447,7 +450,7 @@ async def update_milk_sale(sale_id: str, sale: MilkSale, user: str):
         message=f"{user} updated Milk Sale for {sale.date} - {sale.volume}L at {sale.fat_percentage}% fat = ₹{sale.earnings:,.0f}"
     )
     await db.notifications.insert_one(notif.dict())
-
+    
     # FEEDBACK #5: Send push notification to other user
     await send_push_notification(
         user,
@@ -455,7 +458,7 @@ async def update_milk_sale(sale_id: str, sale: MilkSale, user: str):
         f"{user} updated Milk Sale for {sale.date} - ₹{sale.earnings:,.0f}",
         {"screen": "wrx", "type": "milk_sale"}
     )
-
+    
     return {"success": True}
 
 @api_router.delete("/milk-sales/{sale_id}")
@@ -463,12 +466,12 @@ async def delete_milk_sale(sale_id: str, user: str):
     sale = await db.milk_sales.find_one({"_id": ObjectId(sale_id)})
     if not sale:
         raise HTTPException(status_code=404, detail="Milk sale not found")
-
+    
     await db.milk_sales.update_one(
         {"_id": ObjectId(sale_id)},
         {"$set": {"deleted": True}}
     )
-
+    
     # Create deletion notification
     notif = Notification(
         type="deletion",
@@ -476,7 +479,7 @@ async def delete_milk_sale(sale_id: str, user: str):
         message=f"{user} removed Milk Sale entry for {sale['date']}"
     )
     await db.notifications.insert_one(notif.dict())
-
+    
     # FEEDBACK #5: Send push notification
     await send_push_notification(
         user,
@@ -484,7 +487,7 @@ async def delete_milk_sale(sale_id: str, user: str):
         f"{user} removed Milk Sale for {sale['date']}",
         {"screen": "wrx", "type": "deletion"}
     )
-
+    
     return {"success": True}
 
 # ==================== DAIRY LOCK SALES ENDPOINTS ====================
@@ -520,12 +523,12 @@ async def update_dls(dls_id: str, dls: DairyLockSale, user: str):
     existing_dls = await db.dairy_lock_sales.find_one({"_id": ObjectId(dls_id)})
     if not existing_dls:
         raise HTTPException(status_code=404, detail="DLS not found")
-
+    
     await db.dairy_lock_sales.update_one(
         {"_id": ObjectId(dls_id)},
         {"$set": dls.dict(exclude_unset=True)}
     )
-
+    
     # Create update notification
     notif = Notification(
         type="dls",
@@ -533,7 +536,7 @@ async def update_dls(dls_id: str, dls: DairyLockSale, user: str):
         message=f"{user} updated Dairy Lock Sale for {dls.month}/{dls.year} - ₹{dls.amount:,.0f} on {dls.date}"
     )
     await db.notifications.insert_one(notif.dict())
-
+    
     # FEEDBACK #5: Send push notification to other user
     await send_push_notification(
         user,
@@ -541,7 +544,7 @@ async def update_dls(dls_id: str, dls: DairyLockSale, user: str):
         f"{user} updated Dairy Lock Sale for {dls.month}/{dls.year} - ₹{dls.amount:,.0f}",
         {"screen": "wrx", "type": "dls"}
     )
-
+    
     return {"success": True}
 
 @api_router.delete("/dairy-lock-sales/{dls_id}")
@@ -549,12 +552,12 @@ async def delete_dls(dls_id: str, user: str):
     dls = await db.dairy_lock_sales.find_one({"_id": ObjectId(dls_id)})
     if not dls:
         raise HTTPException(status_code=404, detail="DLS not found")
-
+    
     await db.dairy_lock_sales.update_one(
         {"_id": ObjectId(dls_id)},
         {"$set": {"deleted": True}}
     )
-
+    
     # Create deletion notification
     notif = Notification(
         type="deletion",
@@ -562,7 +565,7 @@ async def delete_dls(dls_id: str, user: str):
         message=f"{user} removed Dairy Lock Sale entry for {dls['month']}/{dls['year']}"
     )
     await db.notifications.insert_one(notif.dict())
-
+    
     # FEEDBACK #5: Send push notification
     await send_push_notification(
         user,
@@ -570,7 +573,7 @@ async def delete_dls(dls_id: str, user: str):
         f"{user} removed Dairy Lock Sale for {dls['month']}/{dls['year']}",
         {"screen": "wrx", "type": "deletion"}
     )
-
+    
     return {"success": True}
 
 # ==================== NOTIFICATION ENDPOINTS ====================
@@ -580,11 +583,11 @@ async def get_notifications(limit: int = 100):
     # Get notifications from last 90 days
     from datetime import timedelta
     ninety_days_ago = datetime.utcnow() - timedelta(days=90)
-
+    
     notifications = await db.notifications.find(
         {"created_at": {"$gte": ninety_days_ago}}
     ).sort("created_at", -1).limit(limit).to_list(limit)
-
+    
     return [serialize_doc(notif) for notif in notifications]
 
 @api_router.post("/notifications/mark-read")
@@ -613,16 +616,16 @@ async def get_dashboard_stats():
     expenditures = await db.expenditures.find({"deleted": False}).to_list(1000)
     milk_sales = await db.milk_sales.find({"deleted": False}).to_list(1000)
     dls = await db.dairy_lock_sales.find({"deleted": False}).to_list(1000)
-
+    
     # Calculate totals
     total_investment = sum(inv["amount"] for inv in investments)
     aadil_investment = sum(inv["amount"] for inv in investments if inv["investor"] == "Aadil")
     imran_investment = sum(inv["amount"] for inv in investments if inv["investor"] == "Imran")
-
+    
     total_expenditure = sum(exp["amount"] for exp in expenditures)
     total_earnings = sum(sale["earnings"] for sale in milk_sales)
     total_dls = sum(d["amount"] for d in dls)
-
+    
     return {
         "total_investment": total_investment,
         "aadil_investment": aadil_investment,
@@ -641,7 +644,7 @@ async def create_event(event: CalendarEvent):
     # Limit description to 15 chars
     if len(event.description) > 15:
         event.description = event.description[:15]
-
+    
     result = await db.events.insert_one(event.dict())
     
     # Create notification
@@ -671,6 +674,14 @@ async def delete_event(event_id: str):
     )
     return {"success": True}
 
+# 🆕 FEEDBACK #16: Manual test endpoint for email reports
+@api_router.post("/test-email-report")
+async def test_email_report():
+    """Manual trigger for testing email reports"""
+    from email_reports import send_daily_report
+    await send_daily_report()
+    return {"message": "Email report sent (check console logs)"}
+
 # Health check
 @api_router.get("/")
 async def root():
@@ -687,7 +698,7 @@ async def cleanup_test_data():
         await db.milk_sales.delete_many({})
         await db.dairy_lock_sales.delete_many({})
         await db.notifications.delete_many({})
-
+        
         return {
             "message": "All test data cleaned up successfully",
             "deleted": {
@@ -715,7 +726,7 @@ app.add_middleware(
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# FEEDBACK #6: Start scheduler on app startup
+# FEEDBACK #6 & #16: Start scheduler on app startup
 @app.on_event("startup")
 async def startup_event():
     # Schedule daily reminder check at 9 AM
@@ -725,8 +736,12 @@ async def startup_event():
         id="event_reminder_check",
         replace_existing=True
     )
+    
+    # 🆕 FEEDBACK #16: Setup email reports (9 AM and 9 PM)
+    setup_email_scheduler(scheduler)
+    
     scheduler.start()
-    logging.info("Scheduler started for event reminders")
+    logging.info("✅ Scheduler started: Event reminders (9 AM) + Email reports (9 AM & 9 PM)")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
