@@ -12,6 +12,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { router } from 'expo-router';
 
+// FEEDBACK #2: Updated to use local image path
 const BACKGROUND_IMAGE = require('../assets/images/0vjmy7gj_1000044672.jpg');
 
 export default function LoginScreen() {
@@ -62,12 +63,13 @@ export default function LoginScreen() {
         <View style={styles.container}>
           <View style={styles.header}>
             <Text style={styles.title}>Wazir Dairy Farming</Text>
+            {/* FEEDBACK #1: Updated subtitle */}
             <Text style={styles.subtitle}>Premium Quality Dairy Products</Text>
           </View>
 
           <View style={styles.loginCard}>
             <Text style={styles.loginTitle}>Select User</Text>
-            
+
             <View style={styles.userButtons}>
               <TouchableOpacity
                 style={[
@@ -108,22 +110,19 @@ export default function LoginScreen() {
               <Text style={styles.pinLabel}>Enter 4-Digit PIN</Text>
               <TextInput
                 style={styles.pinInput}
-                value={pin}
-                onChangeText={setPin}
                 placeholder="••••"
                 secureTextEntry
                 keyboardType="numeric"
                 maxLength={4}
+                value={pin}
+                onChangeText={setPin}
               />
             </View>
 
             <TouchableOpacity
-              style={[
-                styles.loginButton,
-                (!selectedUser || pin.length !== 4) && styles.loginButtonDisabled,
-              ]}
+              style={styles.loginButton}
               onPress={handleLogin}
-              disabled={!selectedUser || pin.length !== 4 || loggingIn}
+              disabled={loggingIn}
             >
               {loggingIn ? (
                 <ActivityIndicator color="#fff" />
