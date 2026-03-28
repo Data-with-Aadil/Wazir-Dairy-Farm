@@ -2,64 +2,40 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Modal,
   TextInput,
+  TouchableOpacity,
+  FlatList,
+  StyleSheet,
+  ImageBackground,
+  KeyboardAvoidingView,
+  Platform,
   Alert,
-  RefreshControl,
-  ActivityIndicator,
+  ScrollView,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { Picker } from '@react-native-picker/picker';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useAuth } from '../../context/AuthContext';
-import { useFocusEffect } from 'expo-router';
+import { Picker } from '@react-native-picker/picker';
 
-const BACKEND_URL = "https://wazir-dairy-farm.onrender.com";
-
-const CATEGORIES = [
-  'Shed / Infrastructure',
-  'Buffalo Purchase',
-  'Machinery',
-  'Equipment',
-  'Land',
-  'Others',
-];
+const API_URL = 'YOUR_BACKEND_URL'; // Replace with your actual backend URL
 
 interface Investment {
-  _id: string;
+  id: string;
   amount: number;
   date: string;
-  investor: string;
   category: string;
-  notes?: string;
+  deleted: boolean;
 }
 
-export default function InvestmentsScreen() {
+export default function InvestmentScreen() {
   const { user } = useAuth();
   const [investments, setInvestments] = useState<Investment[]>([]);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const scrollViewRef = React.useRef<ScrollView>(null);
-
-  // Edit mode states
-  const [editMode, setEditMode] = useState(false);
+  const [amount, setAmount] = useState('');
+  const [category, setCategory] = useState('Gold');
+  const [date, setDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  const [amount, setAmount] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [investor, setInvestor] = useState(user?.name || 'Aadil');
-  const [category, setCategory] = useState('Shed / Infrastructure');
-  const [notes, setNotes] = useState('');
-
-  // Scroll to top when tab is focused
-  useFocusEffect(
-    React.useCallback(() => {
-      scrollViewRef.current?.scrollTo({ y: 0, animated: false });
-    }, [])
-  );
+  const categories = ['Gold', 'Stocks', 'Real Estate', 'Mutual Funds', 'Fixed Deposit', 'Other'];
 
   useEffect(() => {
     fetchInvestments();
@@ -67,484 +43,414 @@ export default function InvestmentsScreen() {
 
   const fetchInvestments = async () => {
     try {
-      const response = await fetch(`${BACKEND_URL}/api/investments`);
-      if (response.ok) {
-        const data = await response.json();
-        setInvestments(data.slice(0, 20));
-      }
+      const response = await fetch(`${API_URL}/api/investments`);
+      const data = await response.json();
+      setInvestments(data.filter((inv: Investment) => !inv.deleted));
     } catch (error) {
       console.error('Error fetching investments:', error);
     }
   };
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await fetchInvestments();
-    setRefreshing(false);
-  };
-
-  const handleAddInvestment = async () => {
+  const handleSubmit = async () => {
     if (!amount) {
-      Alert.alert('Error', 'Please enter amount');
+      Alert.alert('Error', 'Please enter an amount');
       return;
     }
 
-    const amt = parseFloat(amount);
-    if (isNaN(amt) || amt <= 0) {
-      Alert.alert('Error', 'Please enter valid amount');
-      return;
-    }
+    const investmentData = {
+      amount: parseFloat(amount),
+      date: date.toISOString().split('T')[0],
+      category,
+      created_by: user?.name || 'Unknown',
+      deleted: false,
+    };
 
-    setLoading(true);
     try {
-      const response = await fetch(`${BACKEND_URL}/api/investments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          amount: amt,
-          date,
-          investor,
-          category,
-          notes: notes.trim() || undefined,
-        }),
-      });
-
-      if (response.ok) {
-        Alert.alert('Success', 'Investment added successfully');
-        setModalVisible(false);
-        resetForm();
-        fetchInvestments();
+      if (editingId) {
+        // Update existing investment
+        await fetch(`${API_URL}/api/investments/${editingId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(investmentData),
+        });
+      } else {
+        // Create new investment
+        await fetch(`${API_URL}/api/investments`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(investmentData),
+        });
       }
+
+      setAmount('');
+      setCategory('Gold');
+      setDate(new Date());
+      setEditingId(null);
+      fetchInvestments();
     } catch (error) {
-      Alert.alert('Error', 'Failed to add investment');
-    } finally {
-      setLoading(false);
+      console.error('Error saving investment:', error);
+      Alert.alert('Error', 'Failed to save investment');
     }
   };
 
   const handleEdit = (investment: Investment) => {
-    setEditMode(true);
-    setEditingId(investment._id);
     setAmount(investment.amount.toString());
-    setDate(investment.date);
-    setInvestor(investment.investor);
     setCategory(investment.category);
-    setNotes(investment.notes || '');
-    setModalVisible(true);
+    setDate(new Date(investment.date));
+    setEditingId(investment.id);
   };
 
-  const handleUpdateInvestment = async () => {
-    if (!amount || !editingId) {
-      Alert.alert('Error', 'Please enter amount');
-      return;
-    }
-
-    const amt = parseFloat(amount);
-    if (isNaN(amt) || amt <= 0) {
-      Alert.alert('Error', 'Please enter valid amount');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const response = await fetch(`${BACKEND_URL}/api/investments/${editingId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          amount: amt,
-          date,
-          investor,
-          category,
-          notes: notes.trim() || undefined,
-        }),
-      });
-
-      if (response.ok) {
-        Alert.alert('Success', 'Investment updated successfully');
-        setModalVisible(false);
-        setEditMode(false);
-        setEditingId(null);
-        resetForm();
-        fetchInvestments();
-      } else {
-        const data = await response.json();
-        Alert.alert('Error', data?.detail || 'Update failed');
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to update investment');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!user?.name) {
-      Alert.alert('Error', 'User not found');
-      return;
-    }
-
-    Alert.alert('Delete Entry', 'Are you sure you want to delete this entry?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            const response = await fetch(
-              `${BACKEND_URL}/api/investments/${id}?user=${user.name}`,
-              { method: 'DELETE' }
-            );
-            if (response.ok) {
-              Alert.alert('Deleted', 'Investment deleted successfully');
+  const handleDelete = (id: string) => {
+    Alert.alert(
+      'Confirm Delete',
+      'Are you sure you want to delete this investment?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await fetch(`${API_URL}/api/investments/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ deleted: true }),
+              });
               fetchInvestments();
-            } else {
-              const data = await response.json();
-              Alert.alert('Error', data?.detail || 'Delete failed');
+            } catch (error) {
+              console.error('Error deleting investment:', error);
+              Alert.alert('Error', 'Failed to delete investment');
             }
-          } catch (error) {
-            Alert.alert('Error', 'Failed to delete entry');
-          }
+          },
         },
-      },
-    ]);
+      ]
+    );
   };
 
-  const resetForm = () => {
-    setAmount('');
-    setDate(new Date().toISOString().split('T')[0]);
-    setInvestor(user?.name || 'Aadil');
-    setCategory('Shed / Infrastructure');
-    setNotes('');
+  const onDateChange = (event: any, selectedDate?: Date) => {
+    setShowDatePicker(Platform.OS === 'ios');
+    if (selectedDate) {
+      setDate(selectedDate);
+    }
   };
 
-  const closeModal = () => {
-    setModalVisible(false);
-    setEditMode(false);
-    setEditingId(null);
-    resetForm();
+  const formatDate = (dateString: string) => {
+    const d = new Date(dateString);
+    return d.toLocaleDateString('en-GB');
   };
+
+  const totalInvestment = investments.reduce((sum, inv) => sum + inv.amount, 0);
 
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.title}>Investments</Text>
-        <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.addButton}>
-          <Ionicons name="add" size={24} color="#fff" />
-        </TouchableOpacity>
-      </View>
-
-      {/* Investments List */}
-      <ScrollView
-        ref={scrollViewRef}
-        style={styles.content}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
+    <ImageBackground
+      source={require('../../assets/background.jpg')}
+      style={styles.background}
+      resizeMode="cover"
+    >
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.container}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
-        {investments.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Ionicons name="trending-up-outline" size={64} color="#D1D5DB" />
-            <Text style={styles.emptyText}>No investments yet</Text>
-            <Text style={styles.emptySubtext}>Tap + to add your first entry</Text>
-          </View>
-        ) : (
-          investments.map((inv) => (
-            <View key={inv._id} style={styles.card}>
-              <View style={styles.cardHeader}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.cardDate}>{inv.date}</Text>
-                  <Text style={styles.cardAmount}>₹{inv.amount.toLocaleString('en-IN')}</Text>
-                  <Text style={styles.cardCategory}>{inv.category}</Text>
-                  {inv.notes && <Text style={styles.cardNotes}>"{inv.notes}"</Text>}
-                  <Text style={styles.cardInvestor}>By {inv.investor}</Text>
-                </View>
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                  <TouchableOpacity
-                    onPress={() => handleEdit(inv)}
-                    style={styles.editIconButton}
-                  >
-                    <Ionicons name="create-outline" size={18} color="#3B82F6" />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => handleDelete(inv._id)}
-                    style={styles.deleteIconButton}
-                  >
-                    <Ionicons name="trash-outline" size={18} color="#EF4444" />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-          ))
-        )}
-      </ScrollView>
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          {/* Form Section */}
+          <View style={styles.formContainer}>
+            <Text style={styles.title}>
+              {editingId ? 'Edit Investment' : 'Add Investment'}
+            </Text>
 
-      {/* Add/Edit Modal */}
-      <Modal
-        visible={modalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={closeModal}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {editMode ? 'Edit Investment' : 'Add Investment'}
-              </Text>
-              <TouchableOpacity onPress={closeModal}>
-                <Ionicons name="close" size={24} color="#6B7280" />
-              </TouchableOpacity>
-            </View>
+            {/* Amount Input */}
+            <Text style={styles.label}>Amount (₹)</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter amount"
+              placeholderTextColor="#999"
+              keyboardType="numeric"
+              value={amount}
+              onChangeText={setAmount}
+            />
 
-            <ScrollView>
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Amount (₹)</Text>
-                <TextInput
-                  style={styles.input}
-                  value={amount}
-                  onChangeText={setAmount}
-                  placeholder="Enter amount"
-                  keyboardType="numeric"
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Date</Text>
-                <TextInput
-                  style={styles.input}
-                  value={date}
-                  onChangeText={setDate}
-                  placeholder="YYYY-MM-DD"
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Investor</Text>
-                <View style={styles.pickerContainer}>
-                  <Picker
-                    selectedValue={investor}
-                    onValueChange={(value) => setInvestor(value)}
-                    style={styles.picker}
-                  >
-                    <Picker.Item label="Aadil" value="Aadil" />
-                    <Picker.Item label="Imran" value="Imran" />
-                  </Picker>
-                </View>
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Category</Text>
-                <View style={styles.pickerContainer}>
-                  <Picker
-                    selectedValue={category}
-                    onValueChange={(value) => setCategory(value)}
-                    style={styles.picker}
-                  >
-                    {CATEGORIES.map((cat) => (
-                      <Picker.Item key={cat} label={cat} value={cat} />
-                    ))}
-                  </Picker>
-                </View>
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Notes (Optional)</Text>
-                <TextInput
-                  style={styles.input}
-                  value={notes}
-                  onChangeText={setNotes}
-                  placeholder="Optional notes"
-                  multiline
-                />
-              </View>
-
-              <TouchableOpacity
-                style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-                onPress={editMode ? handleUpdateInvestment : handleAddInvestment}
-                disabled={loading}
+            {/* Category Picker */}
+            <Text style={styles.label}>Category</Text>
+            <View style={styles.pickerContainer}>
+              <Picker
+                selectedValue={category}
+                onValueChange={(value) => setCategory(value)}
+                style={styles.picker}
               >
-                {loading ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.submitButtonText}>
-                    {editMode ? 'Update Investment' : 'Add Investment'}
-                  </Text>
-                )}
+                {categories.map((cat) => (
+                  <Picker.Item key={cat} label={cat} value={cat} />
+                ))}
+              </Picker>
+            </View>
+
+            {/* Date Picker */}
+            <Text style={styles.label}>Date</Text>
+            <TouchableOpacity
+              style={styles.dateButton}
+              onPress={() => setShowDatePicker(true)}
+            >
+              <Text style={styles.dateButtonText}>
+                {date.toLocaleDateString('en-GB')}
+              </Text>
+            </TouchableOpacity>
+
+            {showDatePicker && (
+              <DateTimePicker
+                value={date}
+                mode="date"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={onDateChange}
+              />
+            )}
+
+            {/* Submit Button */}
+            <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
+              <Text style={styles.submitButtonText}>
+                {editingId ? 'Update Investment' : 'Add Investment'}
+              </Text>
+            </TouchableOpacity>
+
+            {editingId && (
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => {
+                  setEditingId(null);
+                  setAmount('');
+                  setCategory('Gold');
+                  setDate(new Date());
+                }}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
-            </ScrollView>
+            )}
           </View>
-        </View>
-      </Modal>
-    </View>
+
+          {/* Total Investment */}
+          <View style={styles.totalContainer}>
+            <Text style={styles.totalLabel}>Total Investment:</Text>
+            <Text style={styles.totalAmount}>₹{totalInvestment.toLocaleString('en-IN')}</Text>
+          </View>
+
+          {/* Investments List */}
+          <View style={styles.listContainer}>
+            <Text style={styles.listTitle}>Investment History</Text>
+            <FlatList
+              data={investments}
+              keyExtractor={(item) => item.id}
+              scrollEnabled={false}
+              renderItem={({ item }) => (
+                <View style={styles.investmentCard}>
+                  <View style={styles.investmentInfo}>
+                    <Text style={styles.investmentCategory}>{item.category}</Text>
+                    <Text style={styles.investmentAmount}>
+                      ₹{item.amount.toLocaleString('en-IN')}
+                    </Text>
+                    <Text style={styles.investmentDate}>{formatDate(item.date)}</Text>
+                  </View>
+                  <View style={styles.actions}>
+                    <TouchableOpacity
+                      style={styles.actionButton}
+                      onPress={() => handleEdit(item)}
+                    >
+                      <Text style={styles.actionButtonText}>Edit</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.actionButton}
+                      onPress={() => handleDelete(item.id)}
+                    >
+                      <Text style={styles.actionButtonText}>Delete</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+              ListEmptyComponent={
+                <Text style={styles.emptyText}>No investments yet</Text>
+              }
+            />
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
+  background: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: 'transparent',
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 56,
-    paddingBottom: 16,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+  scrollContent: {
+    flexGrow: 1,
+    padding: 20,
+  },
+  formContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 15,
+    padding: 20,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#1F2937',
-  },
-  addButton: {
-    backgroundColor: '#10B981',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  content: {
-    flex: 1,
-    padding: 16,
-  },
-  emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 100,
-  },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#6B7280',
-    marginTop: 16,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#9CA3AF',
-    marginTop: 8,
-  },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  cardDate: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginBottom: 4,
-  },
-  cardAmount: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#3B82F6',
-    marginBottom: 8,
-  },
-  cardCategory: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
-  cardNotes: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    fontStyle: 'italic',
-    marginTop: 4,
-  },
-  cardInvestor: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginTop: 4,
-  },
-  editIconButton: {
-    padding: 8,
-    backgroundColor: '#DBEAFE',
-    borderRadius: 8,
-  },
-  deleteIconButton: {
-    padding: 8,
-    backgroundColor: '#FEE2E2',
-    borderRadius: 8,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    maxHeight: '85%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    color: '#2c3e50',
     marginBottom: 20,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1F2937',
-  },
-  formGroup: {
-    marginBottom: 16,
+    textAlign: 'center',
   },
   label: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
-    color: '#374151',
+    color: '#34495e',
     marginBottom: 8,
+    marginTop: 12,
   },
   input: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 8,
+    backgroundColor: '#fff',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    borderColor: '#ddd',
+    borderRadius: 10,
+    padding: 12,
     fontSize: 16,
-    color: '#1F2937',
+    color: '#2c3e50',
   },
   pickerContainer: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 8,
+    backgroundColor: '#fff',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: '#ddd',
+    borderRadius: 10,
     overflow: 'hidden',
   },
   picker: {
     height: 50,
   },
-  submitButton: {
-    backgroundColor: '#10B981',
-    borderRadius: 12,
-    paddingVertical: 16,
+  dateButton: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 10,
+    padding: 12,
     alignItems: 'center',
-    marginTop: 8,
   },
-  submitButtonDisabled: {
-    backgroundColor: '#9CA3AF',
+  dateButtonText: {
+    fontSize: 16,
+    color: '#2c3e50',
+  },
+  submitButton: {
+    backgroundColor: '#27ae60',
+    borderRadius: 10,
+    padding: 15,
+    alignItems: 'center',
+    marginTop: 20,
   },
   submitButtonText: {
     color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  cancelButton: {
+    backgroundColor: '#95a5a6',
+    borderRadius: 10,
+    padding: 15,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  cancelButtonText: {
+    color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  totalContainer: {
+    backgroundColor: 'rgba(52, 152, 219, 0.9)',
+    borderRadius: 15,
+    padding: 20,
+    marginBottom: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  totalLabel: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  totalAmount: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  listContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 15,
+    padding: 20,
+    marginBottom: 20,
+  },
+  listTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+    marginBottom: 15,
+  },
+  investmentCard: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 15,
+    marginBottom: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  investmentInfo: {
+    flex: 1,
+  },
+  investmentCategory: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+    marginBottom: 4,
+  },
+  investmentAmount: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#27ae60',
+    marginBottom: 4,
+  },
+  investmentDate: {
+    fontSize: 14,
+    color: '#7f8c8d',
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  actionButton: {
+    backgroundColor: 'transparent',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#3498db',
+  },
+  actionButtonText: {
+    color: '#3498db',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  emptyText: {
+    textAlign: 'center',
+    color: '#95a5a6',
+    fontSize: 16,
+    marginTop: 20,
   },
 });
