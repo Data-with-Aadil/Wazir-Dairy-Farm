@@ -296,10 +296,12 @@ export default function WRXScreen() {
         return '15d';
       case '1_month':
         return '1m';
-      case '2_months':
-        return '2m';
       case '3_months':
         return '3m';
+      case '6_months':  // ADD THIS
+        return '6m';
+      case '1_year':  // ADD THIS
+        return '1y';
       default:
         return null;
     }
@@ -314,7 +316,11 @@ export default function WRXScreen() {
   // Get marked dates for calendar
   const markedDates = events.reduce((acc: any, event) => {
     if (!event.deleted) {
-      acc[event.date] = { marked: true, dotColor: '#10B981' };
+      // Red dot for events with reminders, green for regular events
+      acc[event.date] = { 
+        marked: true, 
+        dotColor: event.reminder ? '#EF4444' : '#10B981'  // Red for reminders
+      };
     }
     return acc;
   }, {});
