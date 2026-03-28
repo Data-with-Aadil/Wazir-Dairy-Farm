@@ -574,7 +574,7 @@ export default function WRXScreen() {
                 {/* Reminder Picker */}
                 <Text style={styles.label}>Reminder</Text>
                 <View style={styles.reminderContainer}>
-                  {['none', '15_days', '1_month', '2_months', '3_months'].map((option) => (
+                  {['none', '15_days', '1_month', '3_months', '6_months', '1_year'].map((option) => (
                     <TouchableOpacity
                       key={option}
                       style={[
