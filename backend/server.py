@@ -1,602 +1,760 @@
-from fastapi import FastAPI, APIRouter, HTTPException
-from dotenv import load_dotenv
-from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
-import os
-import logging
-from pathlib import Path
-from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
-from datetime import datetime
-from bson import ObjectId
-import httpx
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  FlatList,
+  StyleSheet,
+  ImageBackground,
+  KeyboardAvoidingView,
+  Platform,
+  Alert,
+  ScrollView,
+} from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { Calendar } from 'react-native-calendars';
+import { useAuth } from '../../context/AuthContext';
 
-ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
+const API_URL = 'YOUR_BACKEND_URL'; // Replace with your actual backend URL
 
-# MongoDB connection
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+interface Event {
+  id: string;
+  date: string;
+  description: string;
+  created_by: string;
+  reminder?: string;
+  reminder_date?: string;
+  deleted: boolean;
+}
 
-# Create the main app
-app = FastAPI()
-api_router = APIRouter(prefix="/api")
+interface Notification {
+  id: string;
+  type: string;
+  message: string;
+  data: any;
+  read_by: string[];
+  reactions: { [key: string]: string };
+  created_at: string;
+}
 
-# Helper to convert ObjectId to string
-def serialize_doc(doc):
-    if doc and "_id" in doc:
-        doc["_id"] = str(doc["_id"])
-    return doc
+export default function WRXScreen() {
+  const { user } = useAuth();
+  const [events, setEvents] = useState<Event[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [description, setDescription] = useState('');
+  const [date, setDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [reminder, setReminder] = useState<string>('none');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().split('T')[0].substring(0, 7));
+  const [activeTab, setActiveTab] = useState<'events' | 'notifications'>('events');
 
-# Helper to send push notifications
-async def send_push_notification(from_user: str, title: str, body: str):
-    """Send push notification to the other partner"""
-    try:
-        other_user = "Imran" if from_user == "Aadil" else "Aadil"
-        user_doc = await db.users.find_one({"name": other_user})
+  useEffect(() => {
+    fetchEvents();
+    fetchNotifications();
+  }, []);
 
-        if not user_doc or not user_doc.get("expo_push_token"):
-            return
+  const fetchEvents = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/events`);
+      const data = await response.json();
+      setEvents(data.filter((event: Event) => !event.deleted));
+    } catch (error) {
+      console.error('Error fetching events:', error);
+    }
+  };
 
-        push_token = user_doc["expo_push_token"]
+  const fetchNotifications = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/notifications`);
+      const data = await response.json();
+      setNotifications(data);
+    } catch (error) {
+      console.error('Error fetching notifications:', error);
+    }
+  };
 
-        async with httpx.AsyncClient() as client_http:
-            await client_http.post(
-                'https://exp.host/--/api/v2/push/send',
-                json={
-                    "to": push_token,
-                    "title": title,
-                    "body": body,
-                    "data": {"screen": "wrx"},
-                    "sound": "default",
-                    "priority": "high",
-                },
-                headers={"Content-Type": "application/json"}
-            )
-    except Exception as e:
-        logging.error(f"Error sending push notification: {e}")
-
-# ==================== MODELS ====================
-
-class User(BaseModel):
-    name: str
-    pin: str
-    phone: str
-    expo_push_token: Optional[str] = None
-
-class UserLogin(BaseModel):
-    name: str
-    pin: str
-
-class UpdatePushToken(BaseModel):
-    name: str
-    expo_push_token: str
-
-class Investment(BaseModel):
-    amount: float
-    date: str
-    investor: str
-    category: str
-    notes: Optional[str] = None
-    deleted: bool = False
-    created_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
-
-class Expenditure(BaseModel):
-    amount: float
-    date: str
-    paid_by: str
-    category: str
-    subcategory: str
-    notes: Optional[str] = None
-    deleted: bool = False
-    created_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
-
-class MilkSale(BaseModel):
-    date: str
-    volume: float  # liters
-    fat_percentage: float
-    rate: float = 8.4
-    earnings: float
-    deleted: bool = False
-    created_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
-
-class DairyLockSale(BaseModel):
-    month: int
-    year: int
-    amount: float
-    date: str
-    notes: Optional[str] = None
-    deleted: bool = False
-    created_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
-
-class Notification(BaseModel):
-    type: str  # 'investment', 'expenditure', 'milk_sale', 'dls', 'deletion'
-    data: Dict[str, Any]
-    message: str
-    read_by: List[str] = []
-    reactions: Dict[str, str] = {}  # {user: emoji}
-    created_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
-
-class CalendarEvent(BaseModel):
-    date: str  # YYYY-MM-DD format
-    description: str  # max 15 chars
-    created_by: str
-    deleted: bool = False
-    created_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
-
-class ReactionUpdate(BaseModel):
-    notification_id: str
-    user: str
-    emoji: str
-
-class ReadUpdate(BaseModel):
-    notification_ids: List[str]
-    user: str
-
-# ==================== AUTH ENDPOINTS ====================
-
-@api_router.post("/auth/login")
-async def login(credentials: UserLogin):
-    user = await db.users.find_one({"name": credentials.name, "pin": credentials.pin})
-    if not user:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    return {"success": True, "user": {"name": user["name"], "phone": user["phone"]}}
-
-@api_router.post("/auth/setup")
-async def setup_users():
-    # Check if users already exist
-    existing = await db.users.count_documents({})
-    if existing > 0:
-        return {"message": "Users already set up"}
-
-    # Create default users
-    users = [
-        {"name": "Aadil", "pin": "1234", "phone": "+919340482240", "expo_push_token": None},
-        {"name": "Imran", "pin": "5678", "phone": "+919669005006", "expo_push_token": None}
-    ]
-    await db.users.insert_many(users)
-    return {"message": "Users created successfully"}
-
-@api_router.post("/auth/update-push-token")
-async def update_push_token(data: UpdatePushToken):
-    await db.users.update_one(
-        {"name": data.name},
-        {"$set": {"expo_push_token": data.expo_push_token}}
-    )
-    return {"success": True}
-
-# ==================== INVESTMENT ENDPOINTS ====================
-
-@api_router.post("/investments")
-async def create_investment(investment: Investment):
-    result = await db.investments.insert_one(investment.dict())
-    # Create notification
-    notif = Notification(
-        type="investment",
-        data=investment.dict(),
-        message=f"{investment.investor} added Investment - {investment.category} - ₹{investment.amount:,.0f} on {investment.date}"
-    )
-    await db.notifications.insert_one(notif.dict())
-
-    # Send push notification to other user
-    await send_push_notification(
-        investment.investor,
-        "New Investment Added",
-        f"{investment.investor} added Investment - {investment.category} - ₹{investment.amount:,.0f}"
-    )
-
-    return {"success": True, "id": str(result.inserted_id)}
-
-@api_router.put("/investments/{investment_id}")
-async def update_investment(investment_id: str, investment: Investment):
-    await db.investments.update_one(
-        {"_id": ObjectId(investment_id)},
-        {"$set": investment.dict()}
-    )
-    # Create notification
-    notif = Notification(
-        type="investment",
-        data=investment.dict(),
-        message=f"{investment.investor} updated Investment - {investment.category} - ₹{investment.amount:,.0f} on {investment.date}"
-    )
-    await db.notifications.insert_one(notif.dict())
-    return {"success": True}
-
-@api_router.get("/investments")
-async def get_investments(deleted: bool = False):
-    investments = await db.investments.find({"deleted": deleted}).sort("created_at", -1).to_list(1000)
-    return [serialize_doc(inv) for inv in investments]
-
-@api_router.delete("/investments/{investment_id}")
-async def delete_investment(investment_id: str, user: str):
-    inv = await db.investments.find_one({"_id": ObjectId(investment_id)})
-    if not inv:
-        raise HTTPException(status_code=404, detail="Investment not found")
-
-    await db.investments.update_one(
-        {"_id": ObjectId(investment_id)},
-        {"$set": {"deleted": True}}
-    )
-
-    # Create deletion notification
-    notif = Notification(
-        type="deletion",
-        data={"type": "investment", "id": investment_id},
-        message=f"{user} removed Investment entry - {inv['category']} - ₹{inv['amount']:,.0f} on {inv['date']}"
-    )
-    await db.notifications.insert_one(notif.dict())
+  const calculateReminderDate = (eventDate: Date, reminderType: string): string | undefined => {
+    if (reminderType === 'none') return undefined;
     
-    # Send push notification
-    await send_push_notification(
-        user,
-        "Investment Deleted",
-        f"{user} removed Investment - {inv['category']} - ₹{inv['amount']:,.0f}"
-    )
-    
-    return {"success": True}
+    const reminderDate = new Date(eventDate);
+    switch (reminderType) {
+      case '15_days':
+        reminderDate.setDate(reminderDate.getDate() - 15);
+        break;
+      case '1_month':
+        reminderDate.setMonth(reminderDate.getMonth() - 1);
+        break;
+      case '2_months':
+        reminderDate.setMonth(reminderDate.getMonth() - 2);
+        break;
+      case '3_months':
+        reminderDate.setMonth(reminderDate.getMonth() - 3);
+        break;
+      default:
+        return undefined;
+    }
+    return reminderDate.toISOString().split('T')[0];
+  };
 
-# ==================== EXPENDITURE ENDPOINTS ====================
-
-@api_router.post("/expenditures")
-async def create_expenditure(expenditure: Expenditure):
-    result = await db.expenditures.insert_one(expenditure.dict())
-    # Create notification
-    notif = Notification(
-        type="expenditure",
-        data=expenditure.dict(),
-        message=f"{expenditure.paid_by} added Expenditure - {expenditure.category}/{expenditure.subcategory} - ₹{expenditure.amount:,.0f} on {expenditure.date}"
-    )
-    await db.notifications.insert_one(notif.dict())
-    
-    # Send push notification
-    await send_push_notification(
-        expenditure.paid_by,
-        "New Expenditure Added",
-        f"{expenditure.paid_by} added Expenditure - {expenditure.category}/{expenditure.subcategory} - ₹{expenditure.amount:,.0f}"
-    )
-    
-    return {"success": True, "id": str(result.inserted_id)}
-
-@api_router.get("/expenditures")
-async def get_expenditures(deleted: bool = False):
-    expenditures = await db.expenditures.find({"deleted": deleted}).sort("created_at", -1).to_list(1000)
-    return [serialize_doc(exp) for exp in expenditures]
-
-@api_router.patch("/expenditures/{expenditure_id}")
-async def update_expenditure(expenditure_id: str, expenditure: Expenditure, user: str):
-    exp = await db.expenditures.find_one({"_id": ObjectId(expenditure_id)})
-    if not exp:
-        raise HTTPException(status_code=404, detail="Expenditure not found")
-    
-    await db.expenditures.update_one(
-        {"_id": ObjectId(expenditure_id)},
-        {"$set": expenditure.dict(exclude_unset=True)}
-    )
-    
-    # Create update notification
-    notif = Notification(
-        type="expenditure",
-        data=expenditure.dict(),
-        message=f"{user} updated Expenditure - {expenditure.category}/{expenditure.subcategory} - ₹{expenditure.amount:,.0f} on {expenditure.date}"
-    )
-    await db.notifications.insert_one(notif.dict())
-    
-    # Send push notification to other user
-    await send_push_notification(
-        user,
-        "Expenditure Updated",
-        f"{user} updated Expenditure - {expenditure.category}/{expenditure.subcategory} - ₹{expenditure.amount:,.0f}"
-    )
-    
-    return {"success": True}
-
-@api_router.delete("/expenditures/{expenditure_id}")
-async def delete_expenditure(expenditure_id: str, user: str):
-    exp = await db.expenditures.find_one({"_id": ObjectId(expenditure_id)})
-    if not exp:
-        raise HTTPException(status_code=404, detail="Expenditure not found")
-
-    await db.expenditures.update_one(
-        {"_id": ObjectId(expenditure_id)},
-        {"$set": {"deleted": True}}
-    )
-
-    # Create deletion notification
-    notif = Notification(
-        type="deletion",
-        data={"type": "expenditure", "id": expenditure_id},
-        message=f"{user} removed Expenditure entry - {exp['category']}/{exp['subcategory']} - ₹{exp['amount']:,.0f} on {exp['date']}"
-    )
-    await db.notifications.insert_one(notif.dict())
-    
-    # Send push notification
-    await send_push_notification(
-        user,
-        "Expenditure Deleted",
-        f"{user} removed Expenditure - {exp['category']}/{exp['subcategory']} - ₹{exp['amount']:,.0f}"
-    )
-    
-    return {"success": True}
-
-# ==================== MILK SALES ENDPOINTS ====================
-
-@api_router.post("/milk-sales")
-async def create_milk_sale(sale: MilkSale):
-    result = await db.milk_sales.insert_one(sale.dict())
-    # Create notification
-    notif = Notification(
-        type="milk_sale",
-        data=sale.dict(),
-        message=f"Milk Sale added for {sale.date} - {sale.volume}L at {sale.fat_percentage}% fat, Rate: ₹{sale.rate} = ₹{sale.earnings:,.0f}"
-    )
-    await db.notifications.insert_one(notif.dict())
-    return {"success": True, "id": str(result.inserted_id)}
-
-@api_router.get("/milk-sales")
-async def get_milk_sales(deleted: bool = False):
-    sales = await db.milk_sales.find({"deleted": deleted}).sort("created_at", -1).to_list(1000)
-    return [serialize_doc(sale) for sale in sales]
-
-@api_router.patch("/milk-sales/{sale_id}")
-async def update_milk_sale(sale_id: str, sale: MilkSale, user: str):
-    existing_sale = await db.milk_sales.find_one({"_id": ObjectId(sale_id)})
-    if not existing_sale:
-        raise HTTPException(status_code=404, detail="Milk sale not found")
-    
-    await db.milk_sales.update_one(
-        {"_id": ObjectId(sale_id)},
-        {"$set": sale.dict(exclude_unset=True)}
-    )
-    
-    # Create update notification
-    notif = Notification(
-        type="milk_sale",
-        data=sale.dict(),
-        message=f"{user} updated Milk Sale for {sale.date} - {sale.volume}L at {sale.fat_percentage}% fat = ₹{sale.earnings:,.0f}"
-    )
-    await db.notifications.insert_one(notif.dict())
-    
-    # Send push notification to other user
-    await send_push_notification(
-        user,
-        "Milk Sale Updated",
-        f"{user} updated Milk Sale for {sale.date} - ₹{sale.earnings:,.0f}"
-    )
-    
-    return {"success": True}
-
-@api_router.delete("/milk-sales/{sale_id}")
-async def delete_milk_sale(sale_id: str, user: str):
-    sale = await db.milk_sales.find_one({"_id": ObjectId(sale_id)})
-    if not sale:
-        raise HTTPException(status_code=404, detail="Milk sale not found")
-
-    await db.milk_sales.update_one(
-        {"_id": ObjectId(sale_id)},
-        {"$set": {"deleted": True}}
-    )
-
-    # Create deletion notification
-    notif = Notification(
-        type="deletion",
-        data={"type": "milk_sale", "id": sale_id},
-        message=f"{user} removed Milk Sale entry for {sale['date']}"
-    )
-    await db.notifications.insert_one(notif.dict())
-    
-    # Send push notification
-    await send_push_notification(
-        user,
-        "Milk Sale Deleted",
-        f"{user} removed Milk Sale for {sale['date']}"
-    )
-    
-    return {"success": True}
-
-# ==================== DAIRY LOCK SALES ENDPOINTS ====================
-
-@api_router.post("/dairy-lock-sales")
-async def create_dls(dls: DairyLockSale):
-    result = await db.dairy_lock_sales.insert_one(dls.dict())
-    # Create notification
-    notif = Notification(
-        type="dls",
-        data=dls.dict(),
-        message=f"Dairy Lock Sale added for {dls.month}/{dls.year} - ₹{dls.amount:,.0f} on {dls.date}"
-    )
-    await db.notifications.insert_one(notif.dict())
-    return {"success": True, "id": str(result.inserted_id)}
-
-@api_router.get("/dairy-lock-sales")
-async def get_dls(deleted: bool = False):
-    sales = await db.dairy_lock_sales.find({"deleted": deleted}).sort("created_at", -1).to_list(1000)
-    return [serialize_doc(sale) for sale in sales]
-
-@api_router.patch("/dairy-lock-sales/{dls_id}")
-async def update_dls(dls_id: str, dls: DairyLockSale, user: str):
-    existing_dls = await db.dairy_lock_sales.find_one({"_id": ObjectId(dls_id)})
-    if not existing_dls:
-        raise HTTPException(status_code=404, detail="DLS not found")
-    
-    await db.dairy_lock_sales.update_one(
-        {"_id": ObjectId(dls_id)},
-        {"$set": dls.dict(exclude_unset=True)}
-    )
-    
-    # Create update notification
-    notif = Notification(
-        type="dls",
-        data=dls.dict(),
-        message=f"{user} updated Dairy Lock Sale for {dls.month}/{dls.year} - ₹{dls.amount:,.0f} on {dls.date}"
-    )
-    await db.notifications.insert_one(notif.dict())
-    
-    # Send push notification to other user
-    await send_push_notification(
-        user,
-        "DLS Updated",
-        f"{user} updated Dairy Lock Sale for {dls.month}/{dls.year} - ₹{dls.amount:,.0f}"
-    )
-    
-    return {"success": True}
-
-@api_router.delete("/dairy-lock-sales/{dls_id}")
-async def delete_dls(dls_id: str, user: str):
-    dls = await db.dairy_lock_sales.find_one({"_id": ObjectId(dls_id)})
-    if not dls:
-        raise HTTPException(status_code=404, detail="DLS not found")
-
-    await db.dairy_lock_sales.update_one(
-        {"_id": ObjectId(dls_id)},
-        {"$set": {"deleted": True}}
-    )
-
-    # Create deletion notification
-    notif = Notification(
-        type="deletion",
-        data={"type": "dls", "id": dls_id},
-        message=f"{user} removed Dairy Lock Sale entry for {dls['month']}/{dls['year']}"
-    )
-    await db.notifications.insert_one(notif.dict())
-    
-    # Send push notification
-    await send_push_notification(
-        user,
-        "DLS Deleted",
-        f"{user} removed Dairy Lock Sale for {dls['month']}/{dls['year']}"
-    )
-    
-    return {"success": True}
-
-# ==================== NOTIFICATION ENDPOINTS ====================
-
-@api_router.get("/notifications")
-async def get_notifications(limit: int = 100):
-    # Get notifications from last 90 days
-    from datetime import timedelta
-    ninety_days_ago = datetime.utcnow() - timedelta(days=90)
-
-    notifications = await db.notifications.find(
-        {"created_at": {"$gte": ninety_days_ago}}
-    ).sort("created_at", -1).limit(limit).to_list(limit)
-
-    return [serialize_doc(notif) for notif in notifications]
-
-@api_router.post("/notifications/mark-read")
-async def mark_notifications_read(data: ReadUpdate):
-    for notif_id in data.notification_ids:
-        await db.notifications.update_one(
-            {"_id": ObjectId(notif_id)},
-            {"$addToSet": {"read_by": data.user}}
-        )
-    return {"success": True}
-
-@api_router.post("/notifications/react")
-async def react_to_notification(data: ReactionUpdate):
-    await db.notifications.update_one(
-        {"_id": ObjectId(data.notification_id)},
-        {"$set": {f"reactions.{data.user}": data.emoji}}
-    )
-    return {"success": True}
-
-# ==================== DASHBOARD STATS ====================
-
-@api_router.get("/stats/dashboard")
-async def get_dashboard_stats():
-    # Get all non-deleted data
-    investments = await db.investments.find({"deleted": False}).to_list(1000)
-    expenditures = await db.expenditures.find({"deleted": False}).to_list(1000)
-    milk_sales = await db.milk_sales.find({"deleted": False}).to_list(1000)
-    dls = await db.dairy_lock_sales.find({"deleted": False}).to_list(1000)
-
-    # Calculate totals
-    total_investment = sum(inv["amount"] for inv in investments)
-    aadil_investment = sum(inv["amount"] for inv in investments if inv["investor"] == "Aadil")
-    imran_investment = sum(inv["amount"] for inv in investments if inv["investor"] == "Imran")
-
-    total_expenditure = sum(exp["amount"] for exp in expenditures)
-    total_earnings = sum(sale["earnings"] for sale in milk_sales)
-    total_dls = sum(d["amount"] for d in dls)
-
-    return {
-        "total_investment": total_investment,
-        "aadil_investment": aadil_investment,
-        "imran_investment": imran_investment,
-        "total_earnings": total_earnings,
-        "total_expenditure": total_expenditure,
-        "net_profit": total_earnings - total_expenditure,
-        "total_dls": total_dls
+  const handleSubmit = async () => {
+    if (!description) {
+      Alert.alert('Error', 'Please enter event description');
+      return;
     }
 
-# ==================== CALENDAR EVENT ENDPOINTS ====================
+    const eventData = {
+      date: date.toISOString().split('T')[0],
+      description,
+      created_by: user?.name || 'Unknown',
+      reminder: reminder !== 'none' ? reminder : undefined,
+      reminder_date: calculateReminderDate(date, reminder),
+      deleted: false,
+    };
 
-@api_router.post("/events")
-async def create_event(event: CalendarEvent):
-    # Limit description to 15 chars
-    if len(event.description) > 15:
-        event.description = event.description[:15]
+    try {
+      if (editingId) {
+        // Update existing event
+        await fetch(`${API_URL}/api/events/${editingId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(eventData),
+        });
+      } else {
+        // Create new event
+        await fetch(`${API_URL}/api/events`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(eventData),
+        });
+      }
 
-    result = await db.events.insert_one(event.dict())
-    return {"success": True, "id": str(result.inserted_id)}
+      setDescription('');
+      setDate(new Date());
+      setReminder('none');
+      setEditingId(null);
+      fetchEvents();
+    } catch (error) {
+      console.error('Error saving event:', error);
+      Alert.alert('Error', 'Failed to save event');
+    }
+  };
 
-@api_router.get("/events")
-async def get_events(deleted: bool = False):
-    events = await db.events.find({"deleted": deleted}).sort("date", 1).to_list(1000)
-    return [serialize_doc(event) for event in events]
+  const handleEdit = (event: Event) => {
+    setDescription(event.description);
+    setDate(new Date(event.date));
+    setReminder(event.reminder || 'none');
+    setEditingId(event.id);
+  };
 
-@api_router.delete("/events/{event_id}")
-async def delete_event(event_id: str):
-    await db.events.update_one(
-        {"_id": ObjectId(event_id)},
-        {"$set": {"deleted": True}}
-    )
-    return {"success": True}
-
-# Health check
-@api_router.get("/")
-async def root():
-    return {"message": "Wazir Dairy Farming API"}
-
-# Cleanup test data
-@api_router.delete("/test/cleanup")
-async def cleanup_test_data():
-    """Remove all test data from database"""
-    try:
-        # Delete all entries
-        await db.investments.delete_many({})
-        await db.expenditures.delete_many({})
-        await db.milk_sales.delete_many({})
-        await db.dairy_lock_sales.delete_many({})
-        await db.notifications.delete_many({})
-
-        return {
-            "message": "All test data cleaned up successfully",
-            "deleted": {
-                "investments": "all",
-                "expenditures": "all",
-                "milk_sales": "all",
-                "dairy_lock_sales": "all",
-                "notifications": "all"
+  const handleDelete = (id: string) => {
+    Alert.alert(
+      'Confirm Delete',
+      'Are you sure you want to delete this event?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await fetch(`${API_URL}/api/events/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ deleted: true }),
+              });
+              fetchEvents();
+            } catch (error) {
+              console.error('Error deleting event:', error);
+              Alert.alert('Error', 'Failed to delete event');
             }
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+          },
+        },
+      ]
+    );
+  };
 
-# Include router
-app.include_router(api_router)
+  const markAsRead = async (notificationId: string) => {
+    try {
+      await fetch(`${API_URL}/api/notifications/${notificationId}/read`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_name: user?.name }),
+      });
+      fetchNotifications();
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+    }
+  };
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+  const onDateChange = (event: any, selectedDate?: Date) => {
+    setShowDatePicker(Platform.OS === 'ios');
+    if (selectedDate) {
+      setDate(selectedDate);
+    }
+  };
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+  const formatDate = (dateString: string) => {
+    const d = new Date(dateString);
+    return d.toLocaleDateString('en-GB');
+  };
 
-@app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()
+  const getReminderLabel = (reminderType?: string) => {
+    switch (reminderType) {
+      case '15_days':
+        return '15d';
+      case '1_month':
+        return '1m';
+      case '2_months':
+        return '2m';
+      case '3_months':
+        return '3m';
+      default:
+        return null;
+    }
+  };
+
+  // Filter events by selected month
+  const filteredEvents = events.filter((event) => {
+    const eventMonth = event.date.substring(0, 7);
+    return eventMonth === selectedMonth;
+  });
+
+  // Get marked dates for calendar
+  const markedDates = events.reduce((acc: any, event) => {
+    if (!event.deleted) {
+      acc[event.date] = { marked: true, dotColor: '#e74c3c' };
+    }
+    return acc;
+  }, {});
+
+  // Count unread notifications
+  const unreadCount = notifications.filter(
+    (notif) => !notif.read_by.includes(user?.name || '')
+  ).length;
+
+  return (
+    <ImageBackground
+      source={require('../../assets/background.jpg')}
+      style={styles.background}
+      resizeMode="cover"
+    >
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.container}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      >
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          {/* Tab Switcher */}
+          <View style={styles.tabContainer}>
+            <TouchableOpacity
+              style={[styles.tab, activeTab === 'events' && styles.activeTab]}
+              onPress={() => setActiveTab('events')}
+            >
+              <Text style={[styles.tabText, activeTab === 'events' && styles.activeTabText]}>
+                Events
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tab, activeTab === 'notifications' && styles.activeTab]}
+              onPress={() => setActiveTab('notifications')}
+            >
+              <Text style={[styles.tabText, activeTab === 'notifications' && styles.activeTabText]}>
+                Notifications
+                {unreadCount > 0 && (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>{unreadCount}</Text>
+                  </View>
+                )}
+              </Text>
+              {unreadCount > 0 && <View style={styles.redDot} />}
+            </TouchableOpacity>
+          </View>
+
+          {activeTab === 'events' ? (
+            <>
+              {/* Calendar */}
+              <View style={styles.calendarContainer}>
+                <Calendar
+                  markedDates={markedDates}
+                  onMonthChange={(month) => {
+                    setSelectedMonth(`${month.year}-${String(month.month).padStart(2, '0')}`);
+                  }}
+                  theme={{
+                    backgroundColor: 'transparent',
+                    calendarBackground: 'rgba(255, 255, 255, 0.95)',
+                    textSectionTitleColor: '#2c3e50',
+                    selectedDayBackgroundColor: '#e74c3c',
+                    selectedDayTextColor: '#ffffff',
+                    todayTextColor: '#e74c3c',
+                    dayTextColor: '#2c3e50',
+                    textDisabledColor: '#d9e1e8',
+                    dotColor: '#e74c3c',
+                    arrowColor: '#e74c3c',
+                  }}
+                />
+              </View>
+
+              {/* Event Form */}
+              <View style={styles.formContainer}>
+                <Text style={styles.title}>
+                  {editingId ? 'Edit Event' : 'Add Event'}
+                </Text>
+
+                {/* Description Input */}
+                <Text style={styles.label}>Description</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter event description"
+                  placeholderTextColor="#999"
+                  value={description}
+                  onChangeText={setDescription}
+                  multiline
+                />
+
+                {/* Date Picker */}
+                <Text style={styles.label}>Date</Text>
+                <TouchableOpacity
+                  style={styles.dateButton}
+                  onPress={() => setShowDatePicker(true)}
+                >
+                  <Text style={styles.dateButtonText}>
+                    {date.toLocaleDateString('en-GB')}
+                  </Text>
+                </TouchableOpacity>
+
+                {showDatePicker && (
+                  <DateTimePicker
+                    value={date}
+                    mode="date"
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onChange={onDateChange}
+                  />
+                )}
+
+                {/* Reminder Picker */}
+                <Text style={styles.label}>Reminder</Text>
+                <View style={styles.reminderContainer}>
+                  {['none', '15_days', '1_month', '2_months', '3_months'].map((option) => (
+                    <TouchableOpacity
+                      key={option}
+                      style={[
+                        styles.reminderOption,
+                        reminder === option && styles.reminderOptionActive,
+                      ]}
+                      onPress={() => setReminder(option)}
+                    >
+                      <Text
+                        style={[
+                          styles.reminderOptionText,
+                          reminder === option && styles.reminderOptionTextActive,
+                        ]}
+                      >
+                        {option === 'none' ? 'None' : option.replace('_', ' ')}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {/* Submit Button */}
+                <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
+                  <Text style={styles.submitButtonText}>
+                    {editingId ? 'Update Event' : 'Add Event'}
+                  </Text>
+                </TouchableOpacity>
+
+                {editingId && (
+                  <TouchableOpacity
+                    style={styles.cancelButton}
+                    onPress={() => {
+                      setEditingId(null);
+                      setDescription('');
+                      setDate(new Date());
+                      setReminder('none');
+                    }}
+                  >
+                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Events List (Filtered by Month) */}
+              <View style={styles.listContainer}>
+                <Text style={styles.listTitle}>
+                  Events - {new Date(selectedMonth + '-01').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}
+                </Text>
+                <FlatList
+                  data={filteredEvents}
+                  keyExtractor={(item) => item.id}
+                  scrollEnabled={false}
+                  renderItem={({ item }) => (
+                    <View style={styles.eventCard}>
+                      <View style={styles.eventInfo}>
+                        <View style={styles.eventHeader}>
+                          <Text style={styles.eventDescription}>{item.description}</Text>
+                          {item.reminder && (
+                            <View style={styles.reminderBadge}>
+                              <Text style={styles.reminderBadgeText}>
+                                {getReminderLabel(item.reminder)}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text style={styles.eventDate}>{formatDate(item.date)}</Text>
+                        <Text style={styles.eventCreator}>By: {item.created_by}</Text>
+                      </View>
+                      <View style={styles.actions}>
+                        <TouchableOpacity
+                          style={styles.actionButton}
+                          onPress={() => handleEdit(item)}
+                        >
+                          <Text style={styles.actionButtonText}>Edit</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.actionButton}
+                          onPress={() => handleDelete(item.id)}
+                        >
+                          <Text style={styles.actionButtonText}>Delete</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  )}
+                  ListEmptyComponent={
+                    <Text style={styles.emptyText}>No events for this month</Text>
+                  }
+                />
+              </View>
+            </>
+          ) : (
+            // Notifications Tab
+            <View style={styles.listContainer}>
+              <Text style={styles.listTitle}>Activity Feed</Text>
+              <FlatList
+                data={notifications}
+                keyExtractor={(item) => item.id}
+                scrollEnabled={false}
+                renderItem={({ item }) => {
+                  const isRead = item.read_by.includes(user?.name || '');
+                  return (
+                    <TouchableOpacity
+                      style={[styles.notificationCard, !isRead && styles.unreadNotification]}
+                      onPress={() => !isRead && markAsRead(item.id)}
+                    >
+                      <View style={styles.notificationContent}>
+                        {!isRead && <View style={styles.unreadDot} />}
+                        <View style={styles.notificationInfo}>
+                          <Text style={styles.notificationType}>{item.type}</Text>
+                          <Text style={styles.notificationMessage}>{item.message}</Text>
+                          <Text style={styles.notificationTime}>
+                            {new Date(item.created_at).toLocaleString('en-GB')}
+                          </Text>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                }}
+                ListEmptyComponent={
+                  <Text style={styles.emptyText}>No notifications yet</Text>
+                }
+              />
+            </View>
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </ImageBackground>
+  );
+}
+
+const styles = StyleSheet.create({
+  background: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
+  container: {
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
+  scrollContent: {
+    flexGrow: 1,
+    padding: 20,
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 15,
+    marginBottom: 20,
+    padding: 4,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderRadius: 12,
+    position: 'relative',
+  },
+  activeTab: {
+    backgroundColor: '#e74c3c',
+  },
+  tabText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#7f8c8d',
+  },
+  activeTabText: {
+    color: '#fff',
+  },
+  badge: {
+    position: 'absolute',
+    top: -5,
+    right: -10,
+    backgroundColor: '#e74c3c',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  badgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  redDot: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#e74c3c',
+  },
+  calendarContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 15,
+    padding: 10,
+    marginBottom: 20,
+    overflow: 'hidden',
+  },
+  formContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 15,
+    padding: 20,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  label: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#34495e',
+    marginBottom: 8,
+    marginTop: 12,
+  },
+  input: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 16,
+    color: '#2c3e50',
+    minHeight: 60,
+  },
+  dateButton: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 10,
+    padding: 12,
+    alignItems: 'center',
+  },
+  dateButtonText: {
+    fontSize: 16,
+    color: '#2c3e50',
+  },
+  reminderContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  reminderOption: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  reminderOptionActive: {
+    backgroundColor: '#e74c3c',
+    borderColor: '#e74c3c',
+  },
+  reminderOptionText: {
+    fontSize: 14,
+    color: '#2c3e50',
+  },
+  reminderOptionTextActive: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  submitButton: {
+    backgroundColor: '#27ae60',
+    borderRadius: 10,
+    padding: 15,
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  submitButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  cancelButton: {
+    backgroundColor: '#95a5a6',
+    borderRadius: 10,
+    padding: 15,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  cancelButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  listContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 15,
+    padding: 20,
+    marginBottom: 20,
+  },
+  listTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+    marginBottom: 15,
+  },
+  eventCard: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 15,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  eventInfo: {
+    marginBottom: 10,
+  },
+  eventHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  eventDescription: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+    flex: 1,
+  },
+  reminderBadge: {
+    backgroundColor: '#e74c3c',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginLeft: 8,
+  },
+  reminderBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  eventDate: {
+    fontSize: 14,
+    color: '#e74c3c',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  eventCreator: {
+    fontSize: 12,
+    color: '#7f8c8d',
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  actionButton: {
+    backgroundColor: 'transparent',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#3498db',
+  },
+  actionButtonText: {
+    color: '#3498db',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  notificationCard: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 15,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  unreadNotification: {
+    backgroundColor: '#ecf0f1',
+    borderColor: '#e74c3c',
+    borderWidth: 2,
+  },
+  notificationContent: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  unreadDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#e74c3c',
+    marginRight: 10,
+    marginTop: 5,
+  },
+  notificationInfo: {
+    flex: 1,
+  },
+  notificationType: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#e74c3c',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+  },
+  notificationMessage: {
+    fontSize: 15,
+    color: '#2c3e50',
+    marginBottom: 6,
+  },
+  notificationTime: {
+    fontSize: 12,
+    color: '#7f8c8d',
+  },
+  emptyText: {
+    textAlign: 'center',
+    color: '#95a5a6',
+    fontSize: 16,
+    marginTop: 20,
+  },
+});
