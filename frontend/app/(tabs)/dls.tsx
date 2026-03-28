@@ -2,557 +2,415 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Modal,
   TextInput,
+  TouchableOpacity,
+  FlatList,
+  StyleSheet,
+  ImageBackground,
+  KeyboardAvoidingView,
+  Platform,
   Alert,
-  RefreshControl,
-  ActivityIndicator,
+  ScrollView,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { Picker } from '@react-native-picker/picker';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useAuth } from '../../context/AuthContext';
-import { useFocusEffect } from 'expo-router';
 
-const BACKEND_URL = "https://wazir-dairy-farm.onrender.com";
+const API_URL = 'YOUR_BACKEND_URL'; // Replace with your actual backend URL
 
-const MONTHS = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December'
-];
-
-interface DLS {
-  _id: string;
-  month: number;
-  year: number;
-  amount: number;
+interface DairyLockSale {
+  id: string;
+  earnings: number;
   date: string;
-  notes?: string;
+  deleted: boolean;
 }
 
 export default function DLSScreen() {
   const { user } = useAuth();
-  const [dlsList, setDlsList] = useState<DLS[]>([]);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const scrollViewRef = React.useRef<ScrollView>(null);
-
-  // Edit mode states
-  const [editMode, setEditMode] = useState(false);
+  const [sales, setSales] = useState<DairyLockSale[]>([]);
+  const [earnings, setEarnings] = useState('');
+  const [date, setDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  const currentDate = new Date();
-  const [month, setMonth] = useState((currentDate.getMonth() + 1).toString());
-  const [year, setYear] = useState(currentDate.getFullYear().toString());
-  const [amount, setAmount] = useState('');
-  const [date, setDate] = useState(currentDate.toISOString().split('T')[0]);
-  const [notes, setNotes] = useState('');
-
-  // Scroll to top when tab is focused
-  useFocusEffect(
-    React.useCallback(() => {
-      scrollViewRef.current?.scrollTo({ y: 0, animated: false });
-    }, [])
-  );
-
   useEffect(() => {
-    fetchDLS();
+    fetchSales();
   }, []);
 
-  const fetchDLS = async () => {
+  const fetchSales = async () => {
     try {
-      const response = await fetch(`${BACKEND_URL}/api/dairy-lock-sales`);
-      if (response.ok) {
-        const data = await response.json();
-        setDlsList(data);
-      }
+      const response = await fetch(`${API_URL}/api/dairy-lock-sales`);
+      const data = await response.json();
+      setSales(data.filter((sale: DairyLockSale) => !sale.deleted));
     } catch (error) {
       console.error('Error fetching DLS:', error);
     }
   };
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await fetchDLS();
-    setRefreshing(false);
-  };
-
-  const handleAddDLS = async () => {
-    if (!amount) {
-      Alert.alert('Error', 'Please enter amount');
+  const handleSubmit = async () => {
+    if (!earnings) {
+      Alert.alert('Error', 'Please enter earnings amount');
       return;
     }
 
-    const amt = parseFloat(amount);
-    if (isNaN(amt)) {
-      Alert.alert('Error', 'Please enter valid amount');
-      return;
-    }
+    const saleData = {
+      earnings: parseFloat(earnings),
+      date: date.toISOString().split('T')[0],
+      created_by: user?.name || 'Unknown',
+      deleted: false,
+    };
 
-    setLoading(true);
     try {
-      const response = await fetch(`${BACKEND_URL}/api/dairy-lock-sales`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          month: parseInt(month),
-          year: parseInt(year),
-          amount: amt,
-          date,
-          notes: notes || undefined,
-        }),
-      });
-
-      if (response.ok) {
-        Alert.alert('Success', 'Dairy Lock Sale added successfully');
-        setModalVisible(false);
-        resetForm();
-        fetchDLS();
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to add DLS');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleEdit = (dls: DLS) => {
-    setEditMode(true);
-    setEditingId(dls._id);
-    setMonth(dls.month.toString());
-    setYear(dls.year.toString());
-    setAmount(dls.amount.toString());
-    setDate(dls.date);
-    setNotes(dls.notes || '');
-    setModalVisible(true);
-  };
-
-  const handleUpdateDLS = async () => {
-    if (!amount || !editingId) {
-      Alert.alert('Error', 'Please enter amount');
-      return;
-    }
-
-    const amt = parseFloat(amount);
-    if (isNaN(amt)) {
-      Alert.alert('Error', 'Please enter valid amount');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const response = await fetch(`${BACKEND_URL}/api/dairy-lock-sales/${editingId}?user=${user?.name}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          month: parseInt(month),
-          year: parseInt(year),
-          amount: amt,
-          date,
-          notes: notes || undefined,
-        }),
-      });
-
-      if (response.ok) {
-        Alert.alert('Success', 'DLS updated successfully');
-        setModalVisible(false);
-        setEditMode(false);
-        setEditingId(null);
-        resetForm();
-        fetchDLS();
+      if (editingId) {
+        // Update existing sale
+        await fetch(`${API_URL}/api/dairy-lock-sales/${editingId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(saleData),
+        });
       } else {
-        Alert.alert('Error', 'Update failed');
+        // Create new sale
+        await fetch(`${API_URL}/api/dairy-lock-sales`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(saleData),
+        });
       }
+
+      setEarnings('');
+      setDate(new Date());
+      setEditingId(null);
+      fetchSales();
     } catch (error) {
-      Alert.alert('Error', 'Failed to update DLS');
-    } finally {
-      setLoading(false);
+      console.error('Error saving DLS:', error);
+      Alert.alert('Error', 'Failed to save dairy lock sale');
     }
   };
 
-  const handleDelete = async (id: string) => {
-    Alert.alert('Delete Entry', 'Are you sure you want to delete this entry?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            const response = await fetch(
-              `${BACKEND_URL}/api/dairy-lock-sales/${id}?user=${user?.name}`,
-              { method: 'DELETE' }
-            );
-            if (response.ok) {
-              fetchDLS();
+  const handleEdit = (sale: DairyLockSale) => {
+    setEarnings(sale.earnings.toString());
+    setDate(new Date(sale.date));
+    setEditingId(sale.id);
+  };
+
+  const handleDelete = (id: string) => {
+    Alert.alert(
+      'Confirm Delete',
+      'Are you sure you want to delete this dairy lock sale?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await fetch(`${API_URL}/api/dairy-lock-sales/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ deleted: true }),
+              });
+              fetchSales();
+            } catch (error) {
+              console.error('Error deleting DLS:', error);
+              Alert.alert('Error', 'Failed to delete dairy lock sale');
             }
-          } catch (error) {
-            Alert.alert('Error', 'Failed to delete entry');
-          }
+          },
         },
-      },
-    ]);
+      ]
+    );
   };
 
-  const resetForm = () => {
-    const now = new Date();
-    setMonth((now.getMonth() + 1).toString());
-    setYear(now.getFullYear().toString());
-    setAmount('');
-    setDate(now.toISOString().split('T')[0]);
-    setNotes('');
+  const onDateChange = (event: any, selectedDate?: Date) => {
+    setShowDatePicker(Platform.OS === 'ios');
+    if (selectedDate) {
+      setDate(selectedDate);
+    }
   };
 
-  const closeModal = () => {
-    setModalVisible(false);
-    setEditMode(false);
-    setEditingId(null);
-    resetForm();
+  const formatDate = (dateString: string) => {
+    const d = new Date(dateString);
+    return d.toLocaleDateString('en-GB');
   };
 
-  const getMonthName = (monthNum: number) => MONTHS[monthNum - 1];
+  const netDLS = sales.reduce((sum, sale) => sum + sale.earnings, 0);
 
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>Dairy Lock Sales</Text>
-          <Text style={styles.subtitle}>Actual Payments Received</Text>
-        </View>
-        <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.addButton}>
-          <Ionicons name="add" size={24} color="#fff" />
-        </TouchableOpacity>
-      </View>
-
-      {/* DLS List */}
-      <ScrollView
-        ref={scrollViewRef}
-        style={styles.content}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
+    <ImageBackground
+      source={require('../../assets/background.jpg')}
+      style={styles.background}
+      resizeMode="cover"
+    >
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.container}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
-        {dlsList.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Ionicons name="wallet-outline" size={64} color="#D1D5DB" />
-            <Text style={styles.emptyText}>No payments recorded yet</Text>
-            <Text style={styles.emptySubtext}>Tap + to add your first payment</Text>
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          {/* Form Section */}
+          <View style={styles.formContainer}>
+            <Text style={styles.title}>
+              {editingId ? 'Edit Dairy Lock Sale' : 'Add Dairy Lock Sale'}
+            </Text>
+
+            {/* Earnings Input */}
+            <Text style={styles.label}>Earnings (₹)</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter earnings"
+              placeholderTextColor="#999"
+              keyboardType="numeric"
+              value={earnings}
+              onChangeText={setEarnings}
+            />
+
+            {/* Date Picker */}
+            <Text style={styles.label}>Date</Text>
+            <TouchableOpacity
+              style={styles.dateButton}
+              onPress={() => setShowDatePicker(true)}
+            >
+              <Text style={styles.dateButtonText}>
+                {date.toLocaleDateString('en-GB')}
+              </Text>
+            </TouchableOpacity>
+
+            {showDatePicker && (
+              <DateTimePicker
+                value={date}
+                mode="date"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={onDateChange}
+              />
+            )}
+
+            {/* Submit Button */}
+            <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
+              <Text style={styles.submitButtonText}>
+                {editingId ? 'Update Sale' : 'Add Sale'}
+              </Text>
+            </TouchableOpacity>
+
+            {editingId && (
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => {
+                  setEditingId(null);
+                  setEarnings('');
+                  setDate(new Date());
+                }}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+            )}
           </View>
-        ) : (
-          dlsList.map((dls) => (
-            <View key={dls._id} style={styles.card}>
-              <View style={styles.cardRow}>
-                <View style={styles.cardLeft}>
-                  <View style={styles.monthBadge}>
-                    <Text style={styles.monthText}>{getMonthName(dls.month)}</Text>
-                    <Text style={styles.yearText}>{dls.year}</Text>
+
+          {/* Net DLS Display */}
+          <View style={styles.netDLSContainer}>
+            <Text style={styles.netDLSLabel}>Net DLS:</Text>
+            <Text style={styles.netDLSAmount}>₹{netDLS.toLocaleString('en-IN')}</Text>
+          </View>
+
+          {/* Sales List */}
+          <View style={styles.listContainer}>
+            <Text style={styles.listTitle}>Dairy Lock Sales History</Text>
+            <FlatList
+              data={sales}
+              keyExtractor={(item) => item.id}
+              scrollEnabled={false}
+              renderItem={({ item }) => (
+                <View style={styles.saleCard}>
+                  <View style={styles.saleInfo}>
+                    <Text style={styles.saleAmount}>
+                      ₹{item.earnings.toLocaleString('en-IN')}
+                    </Text>
+                    <Text style={styles.saleDate}>{formatDate(item.date)}</Text>
+                  </View>
+                  <View style={styles.actions}>
+                    <TouchableOpacity
+                      style={styles.actionButton}
+                      onPress={() => handleEdit(item)}
+                    >
+                      <Text style={styles.actionButtonText}>Edit</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.actionButton}
+                      onPress={() => handleDelete(item.id)}
+                    >
+                      <Text style={styles.actionButtonText}>Delete</Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
-                <View style={styles.cardCenter}>
-                  <Text style={styles.cardAmount}>₹{dls.amount.toLocaleString('en-IN')}</Text>
-                  <Text style={styles.cardDate}>Received on {dls.date}</Text>
-                  {dls.notes && <Text style={styles.cardNotes}>{dls.notes}</Text>}
-                </View>
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                  <TouchableOpacity onPress={() => handleEdit(dls)} style={styles.editButton}>
-                    <Ionicons name="create-outline" size={20} color="#3B82F6" />
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => handleDelete(dls._id)} style={styles.deleteButton}>
-                    <Ionicons name="trash-outline" size={20} color="#EF4444" />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-          ))
-        )}
-      </ScrollView>
-
-      {/* Add/Edit Modal */}
-      <Modal
-        visible={modalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={closeModal}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {editMode ? 'Edit Payment' : 'Add Payment'}
-              </Text>
-              <TouchableOpacity onPress={closeModal}>
-                <Ionicons name="close" size={24} color="#6B7280" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView>
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Month</Text>
-                <View style={styles.pickerContainer}>
-                  <Picker
-                    selectedValue={month}
-                    onValueChange={(value) => setMonth(value)}
-                    style={styles.picker}
-                  >
-                    {MONTHS.map((m, idx) => (
-                      <Picker.Item key={m} label={m} value={(idx + 1).toString()} />
-                    ))}
-                  </Picker>
-                </View>
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Year</Text>
-                <View style={styles.pickerContainer}>
-                  <Picker
-                    selectedValue={year}
-                    onValueChange={(value) => setYear(value)}
-                    style={styles.picker}
-                  >
-                    {[2024, 2025, 2026, 2027].map((y) => (
-                      <Picker.Item key={y} label={y.toString()} value={y.toString()} />
-                    ))}
-                  </Picker>
-                </View>
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Amount (₹)</Text>
-                <TextInput
-                  style={styles.input}
-                  value={amount}
-                  onChangeText={setAmount}
-                  placeholder="Enter amount"
-                  keyboardType="numeric"
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Payment Date</Text>
-                <TextInput
-                  style={styles.input}
-                  value={date}
-                  onChangeText={setDate}
-                  placeholder="YYYY-MM-DD"
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Notes (Optional)</Text>
-                <TextInput
-                  style={styles.input}
-                  value={notes}
-                  onChangeText={setNotes}
-                  placeholder="Optional notes"
-                  multiline
-                />
-              </View>
-
-              <TouchableOpacity
-                style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-                onPress={editMode ? handleUpdateDLS : handleAddDLS}
-                disabled={loading}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.submitButtonText}>
-                    {editMode ? 'Update Payment' : 'Add Payment'}
-                  </Text>
-                )}
-              </TouchableOpacity>
-            </ScrollView>
+              )}
+              ListEmptyComponent={
+                <Text style={styles.emptyText}>No dairy lock sales yet</Text>
+              }
+            />
           </View>
-        </View>
-      </Modal>
-    </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
+  background: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: 'transparent',
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 56,
-    paddingBottom: 16,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+  scrollContent: {
+    flexGrow: 1,
+    padding: 20,
+  },
+  formContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 15,
+    padding: 20,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#1F2937',
-  },
-  subtitle: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginTop: 2,
-  },
-  addButton: {
-    backgroundColor: '#10B981',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  content: {
-    flex: 1,
-    padding: 16,
-  },
-  emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 100,
-  },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#6B7280',
-    marginTop: 16,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#9CA3AF',
-    marginTop: 8,
-  },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  cardRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  cardLeft: {
-    marginRight: 16,
-  },
-  monthBadge: {
-    backgroundColor: '#F0FDF4',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    alignItems: 'center',
-    minWidth: 70,
-  },
-  monthText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#059669',
-  },
-  yearText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#10B981',
-    marginTop: 2,
-  },
-  cardCenter: {
-    flex: 1,
-  },
-  cardAmount: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#1F2937',
-    marginBottom: 4,
-  },
-  cardDate: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
-  cardNotes: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    marginTop: 4,
-    fontStyle: 'italic',
-  },
-  editButton: {
-    padding: 8,
-  },
-  deleteButton: {
-    padding: 8,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    maxHeight: '85%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    color: '#2c3e50',
     marginBottom: 20,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1F2937',
-  },
-  formGroup: {
-    marginBottom: 16,
+    textAlign: 'center',
   },
   label: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
-    color: '#374151',
+    color: '#34495e',
     marginBottom: 8,
+    marginTop: 12,
   },
   input: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 8,
+    backgroundColor: '#fff',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    borderColor: '#ddd',
+    borderRadius: 10,
+    padding: 12,
     fontSize: 16,
-    color: '#1F2937',
+    color: '#2c3e50',
   },
-  pickerContainer: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 8,
+  dateButton: {
+    backgroundColor: '#fff',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    overflow: 'hidden',
+    borderColor: '#ddd',
+    borderRadius: 10,
+    padding: 12,
+    alignItems: 'center',
   },
-  picker: {
-    height: 50,
+  dateButtonText: {
+    fontSize: 16,
+    color: '#2c3e50',
   },
   submitButton: {
-    backgroundColor: '#10B981',
-    borderRadius: 12,
-    paddingVertical: 16,
+    backgroundColor: '#27ae60',
+    borderRadius: 10,
+    padding: 15,
     alignItems: 'center',
-    marginTop: 8,
-  },
-  submitButtonDisabled: {
-    backgroundColor: '#9CA3AF',
+    marginTop: 20,
   },
   submitButtonText: {
     color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  cancelButton: {
+    backgroundColor: '#95a5a6',
+    borderRadius: 10,
+    padding: 15,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  cancelButtonText: {
+    color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  netDLSContainer: {
+    backgroundColor: 'rgba(155, 89, 182, 0.9)',
+    borderRadius: 15,
+    padding: 20,
+    marginBottom: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  netDLSLabel: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  netDLSAmount: {
+    fontSize: 26,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  listContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 15,
+    padding: 20,
+    marginBottom: 20,
+  },
+  listTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+    marginBottom: 15,
+  },
+  saleCard: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 15,
+    marginBottom: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  saleInfo: {
+    flex: 1,
+  },
+  saleAmount: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#9b59b6',
+    marginBottom: 4,
+  },
+  saleDate: {
+    fontSize: 14,
+    color: '#7f8c8d',
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  actionButton: {
+    backgroundColor: 'transparent',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#3498db',
+  },
+  actionButtonText: {
+    color: '#3498db',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  emptyText: {
+    textAlign: 'center',
+    color: '#95a5a6',
+    fontSize: 16,
+    marginTop: 20,
   },
 });
