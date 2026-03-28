@@ -16,10 +16,11 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
+import DateTimePicker from '@react-native-community/datetimepicker'; // FEEDBACK #14
 import { useAuth } from '../../context/AuthContext';
 import { useFocusEffect } from 'expo-router';
-import DateTimePicker from '@react-native-community/datetimepicker';
 
+// FEEDBACK #3 & #9: Add background image
 const BACKGROUND_IMAGE = require('../../assets/images/0vjmy7gj_1000044672.jpg');
 const BACKEND_URL = "https://wazir-dairy-farm.onrender.com";
 
@@ -73,17 +74,20 @@ export default function ExpenditureScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const scrollViewRef = React.useRef<ScrollView>(null);
 
+  // Edit mode states
   const [editMode, setEditMode] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
+  // Form fields
   const [amount, setAmount] = useState('');
-  const [date, setDate] = useState(new Date());
-  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [date, setDate] = useState(new Date()); // FEEDBACK #14: Changed to Date object
+  const [showDatePicker, setShowDatePicker] = useState(false); // FEEDBACK #14
   const [paidBy, setPaidBy] = useState(user?.name || 'Aadil');
   const [category, setCategory] = useState('Supplements');
   const [subcategory, setSubcategory] = useState('Mineral Mixture');
   const [notes, setNotes] = useState('');
 
+  // Scroll to top when tab is focused
   useFocusEffect(
     React.useCallback(() => {
       scrollViewRef.current?.scrollTo({ y: 0, animated: false });
@@ -112,6 +116,14 @@ export default function ExpenditureScreen() {
     setRefreshing(false);
   };
 
+  // FEEDBACK #14: Date picker handler
+  const onDateChange = (event: any, selectedDate?: Date) => {
+    setShowDatePicker(Platform.OS === 'ios');
+    if (selectedDate) {
+      setDate(selectedDate);
+    }
+  };
+
   const handleAddExpenditure = async () => {
     if (!amount) {
       Alert.alert('Error', 'Please enter amount');
@@ -131,7 +143,7 @@ export default function ExpenditureScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           amount: amt,
-          date: date.toISOString().split('T')[0],
+          date: date.toISOString().split('T')[0], // FEEDBACK #14: Convert Date to string
           paid_by: paidBy,
           category,
           subcategory,
@@ -156,7 +168,7 @@ export default function ExpenditureScreen() {
     setEditMode(true);
     setEditingId(expenditure._id);
     setAmount(expenditure.amount.toString());
-    setDate(new Date(expenditure.date));
+    setDate(new Date(expenditure.date)); // FEEDBACK #14: Convert string to Date
     setPaidBy(expenditure.paid_by);
     setCategory(expenditure.category);
     setSubcategory(expenditure.subcategory);
@@ -183,7 +195,7 @@ export default function ExpenditureScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           amount: amt,
-          date: date.toISOString().split('T')[0],
+          date: date.toISOString().split('T')[0], // FEEDBACK #14
           paid_by: paidBy,
           category,
           subcategory,
@@ -209,13 +221,14 @@ export default function ExpenditureScreen() {
     }
   };
 
+  // FEEDBACK #12: Delete confirmation already exists
   const handleDelete = async (id: string) => {
     if (!user?.name) {
       Alert.alert('Error', 'User not found');
       return;
     }
 
-    Alert.alert('Delete Entry', 'Are you sure you want to delete this entry?', [
+    Alert.alert('Delete Entry', 'Are you sure?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -241,7 +254,7 @@ export default function ExpenditureScreen() {
 
   const resetForm = () => {
     setAmount('');
-    setDate(new Date());
+    setDate(new Date()); // FEEDBACK #14
     setPaidBy(user?.name || 'Aadil');
     setCategory('Supplements');
     setSubcategory(CATEGORIES['Supplements'][0]);
@@ -255,17 +268,16 @@ export default function ExpenditureScreen() {
     resetForm();
   };
 
-  const handleDateChange = (event: any, selectedDate?: Date) => {
-    setShowDatePicker(false);
-    if (selectedDate) {
-      setDate(selectedDate);
-    }
-  };
-
   return (
     <ImageBackground source={BACKGROUND_IMAGE} style={styles.background} resizeMode="cover">
       <View style={styles.overlay}>
-        <View style={styles.container}>
+        {/* FEEDBACK #13: KeyboardAvoidingView */}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.container}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        >
+          {/* Header */}
           <View style={styles.header}>
             <Text style={styles.title}>Expenditure</Text>
             <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.addButton}>
@@ -273,14 +285,17 @@ export default function ExpenditureScreen() {
             </TouchableOpacity>
           </View>
 
+          {/* Expenditures List */}
           <ScrollView
             ref={scrollViewRef}
             style={styles.content}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
           >
             {expenditures.length === 0 ? (
               <View style={styles.emptyState}>
-                <Ionicons name="receipt-outline" size={64} color="#D1D5DB" />
+                <Ionicons name="cash-outline" size={64} color="#D1D5DB" />
                 <Text style={styles.emptyText}>No expenditures yet</Text>
                 <Text style={styles.emptySubtext}>Tap + to add your first entry</Text>
               </View>
@@ -288,18 +303,27 @@ export default function ExpenditureScreen() {
               expenditures.map((exp) => (
                 <View key={exp._id} style={styles.card}>
                   <View style={styles.cardHeader}>
-                    <View style={{ flex: 1 }}>
+                    <View>
                       <Text style={styles.cardDate}>{exp.date}</Text>
-                      <Text style={styles.cardAmount} numberOfLines={1}>₹{exp.amount.toLocaleString('en-IN')}</Text>
-                      <Text style={styles.cardCategory}>{exp.category} • {exp.subcategory}</Text>
+                      <Text style={styles.cardAmount}>₹{exp.amount.toLocaleString('en-IN')}</Text>
+                      <Text style={styles.cardCategory}>
+                        {exp.category} • {exp.subcategory}
+                      </Text>
                       {exp.notes && <Text style={styles.cardNotes}>"{exp.notes}"</Text>}
                       <Text style={styles.cardPaidBy}>Paid by {exp.paid_by}</Text>
                     </View>
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                      <TouchableOpacity onPress={() => handleEdit(exp)} style={styles.editIconButton}>
+                    <View style={{ gap: 8 }}>
+                      {/* FEEDBACK #10: Transparent background for edit/delete buttons */}
+                      <TouchableOpacity
+                        onPress={() => handleEdit(exp)}
+                        style={styles.editIconButton}
+                      >
                         <Ionicons name="create-outline" size={20} color="#3B82F6" />
                       </TouchableOpacity>
-                      <TouchableOpacity onPress={() => handleDelete(exp._id)} style={styles.deleteIconButton}>
+                      <TouchableOpacity
+                        onPress={() => handleDelete(exp._id)}
+                        style={styles.deleteIconButton}
+                      >
                         <Ionicons name="trash-outline" size={20} color="#EF4444" />
                       </TouchableOpacity>
                     </View>
@@ -309,40 +333,57 @@ export default function ExpenditureScreen() {
             )}
           </ScrollView>
 
-          <Modal visible={modalVisible} animationType="slide" transparent={true} onRequestClose={closeModal}>
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
+          {/* Add/Edit Modal */}
+          <Modal
+            visible={modalVisible}
+            animationType="slide"
+            transparent={true}
+            onRequestClose={closeModal}
+          >
+            <KeyboardAvoidingView
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+              style={styles.modalOverlay}
+            >
               <View style={styles.modalContent}>
                 <View style={styles.modalHeader}>
-                  <Text style={styles.modalTitle}>{editMode ? 'Edit Expenditure' : 'Add Expenditure'}</Text>
+                  <Text style={styles.modalTitle}>
+                    {editMode ? 'Edit Expenditure' : 'Add Expenditure'}
+                  </Text>
                   <TouchableOpacity onPress={closeModal}>
                     <Ionicons name="close" size={24} color="#6B7280" />
                   </TouchableOpacity>
                 </View>
 
-                <ScrollView showsVerticalScrollIndicator={false}>
+                <ScrollView>
                   <View style={styles.formGroup}>
                     <Text style={styles.label}>Amount (₹)</Text>
                     <TextInput
                       style={styles.input}
                       value={amount}
                       onChangeText={setAmount}
-                      placeholder="Enter amount"
+                      placeholder="0"
                       keyboardType="numeric"
                     />
                   </View>
 
+                  {/* FEEDBACK #14: Native Date Picker */}
                   <View style={styles.formGroup}>
                     <Text style={styles.label}>Date</Text>
-                    <TouchableOpacity onPress={() => setShowDatePicker(true)} style={styles.dateButton}>
-                      <Text style={styles.dateText}>{date.toISOString().split('T')[0]}</Text>
+                    <TouchableOpacity
+                      style={styles.dateButton}
+                      onPress={() => setShowDatePicker(true)}
+                    >
+                      <Text style={styles.dateButtonText}>
+                        {date.toLocaleDateString('en-GB')}
+                      </Text>
                       <Ionicons name="calendar-outline" size={20} color="#6B7280" />
                     </TouchableOpacity>
                     {showDatePicker && (
                       <DateTimePicker
                         value={date}
                         mode="date"
-                        display="default"
-                        onChange={handleDateChange}
+                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                        onChange={onDateChange}
                       />
                     )}
                   </View>
@@ -409,44 +450,207 @@ export default function ExpenditureScreen() {
               </View>
             </KeyboardAvoidingView>
           </Modal>
-        </View>
+        </KeyboardAvoidingView>
       </View>
     </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  background: { flex: 1 },
-  overlay: { flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.92)' },
-  container: { flex: 1 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 56, paddingBottom: 16, backgroundColor: 'transparent', borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
-  title: { fontSize: 24, fontWeight: 'bold', color: '#1F2937' },
-  addButton: { backgroundColor: '#10B981', width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
-  content: { flex: 1, padding: 16 },
-  card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2 },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between' },
-  cardDate: { fontSize: 12, color: '#6B7280', marginBottom: 4 },
-  cardAmount: { fontSize: 24, fontWeight: 'bold', color: '#EF4444', marginBottom: 8 },
-  cardCategory: { fontSize: 12, color: '#6B7280' },
-  cardNotes: { fontSize: 12, color: '#9CA3AF', fontStyle: 'italic', marginTop: 4 },
-  cardPaidBy: { fontSize: 12, color: '#6B7280', marginTop: 4 },
-  editIconButton: { padding: 8, backgroundColor: 'transparent' },
-  deleteIconButton: { padding: 8, backgroundColor: 'transparent' },
-  emptyState: { alignItems: 'center', justifyContent: 'center', paddingTop: 100 },
-  emptyText: { fontSize: 18, fontWeight: '600', color: '#6B7280', marginTop: 16 },
-  emptySubtext: { fontSize: 14, color: '#9CA3AF', marginTop: 8 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: '90%' },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#1F2937' },
-  formGroup: { marginBottom: 16 },
-  label: { fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8 },
-  input: { backgroundColor: '#F9FAFB', borderRadius: 8, borderWidth: 1, borderColor: '#E5E7EB', paddingVertical: 12, paddingHorizontal: 16, fontSize: 16, color: '#1F2937' },
-  dateButton: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F9FAFB', borderRadius: 8, borderWidth: 1, borderColor: '#E5E7EB', paddingVertical: 12, paddingHorizontal: 16 },
-  dateText: { fontSize: 16, color: '#1F2937' },
-  pickerContainer: { backgroundColor: '#F9FAFB', borderRadius: 8, borderWidth: 1, borderColor: '#E5E7EB', overflow: 'hidden' },
-  picker: { height: 50 },
-  submitButton: { backgroundColor: '#10B981', borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 8, marginBottom: 20 },
-  submitButtonDisabled: { backgroundColor: '#9CA3AF' },
-  submitButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  // FEEDBACK #3 & #9: Transparent background
+  background: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+  },
+  container: {
+    flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 56,
+    paddingBottom: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1F2937',
+  },
+  addButton: {
+    backgroundColor: '#10B981',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  content: {
+    flex: 1,
+    padding: 16,
+  },
+  card: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  cardDate: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginBottom: 4,
+  },
+  cardAmount: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#EF4444',
+    marginBottom: 8,
+  },
+  cardCategory: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  cardNotes: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontStyle: 'italic',
+    marginTop: 4,
+  },
+  cardPaidBy: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 4,
+  },
+  // FEEDBACK #10: Transparent edit/delete buttons
+  editIconButton: {
+    padding: 8,
+    backgroundColor: 'transparent',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#3B82F6',
+  },
+  deleteIconButton: {
+    padding: 8,
+    backgroundColor: 'transparent',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#EF4444',
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 100,
+  },
+  emptyText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#6B7280',
+    marginTop: 16,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    marginTop: 8,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    maxHeight: '90%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1F2937',
+  },
+  formGroup: {
+    marginBottom: 16,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  input: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    color: '#1F2937',
+  },
+  // FEEDBACK #14: Date button
+  dateButton: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  dateButtonText: {
+    fontSize: 16,
+    color: '#1F2937',
+  },
+  pickerContainer: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    overflow: 'hidden',
+  },
+  picker: {
+    height: 50,
+  },
+  submitButton: {
+    backgroundColor: '#10B981',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  submitButtonDisabled: {
+    backgroundColor: '#9CA3AF',
+  },
+  submitButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
 });
