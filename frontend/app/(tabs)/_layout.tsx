@@ -1,28 +1,25 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Platform } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context'; // FEEDBACK #3
 
 export default function TabLayout() {
+  // FEEDBACK #3: Get safe area insets for Android
   const insets = useSafeAreaInsets();
 
   return (
     <Tabs
       screenOptions={{
-        headerShown: false,
         tabBarActiveTintColor: '#10B981',
-        tabBarInactiveTintColor: '#9CA3AF',
+        tabBarInactiveTintColor: '#6B7280',
+        headerShown: false,
         tabBarStyle: {
           backgroundColor: '#fff',
           borderTopWidth: 1,
           borderTopColor: '#E5E7EB',
-          height: 60 + (Platform.OS === 'android' ? insets.bottom : 0),
-          paddingBottom: Platform.OS === 'android' ? insets.bottom + 8 : 8,
+          height: Platform.OS === 'ios' ? 88 : 60 + insets.bottom, // FEEDBACK #3: Add bottom inset for Android
+          paddingBottom: Platform.OS === 'ios' ? 32 : insets.bottom, // FEEDBACK #3
           paddingTop: 8,
-        },
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: '600',
         },
       }}
     >
@@ -32,6 +29,15 @@ export default function TabLayout() {
           title: 'Dashboard',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="home" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="expenditure"
+        options={{
+          title: 'Expenditure',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="cash" size={size} color={color} />
           ),
         }}
       />
@@ -49,28 +55,22 @@ export default function TabLayout() {
         options={{
           title: 'DLS',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="wallet" size={size} color={color} />
+            <Ionicons name="lock-closed" size={size} color={color} />
           ),
         }}
       />
-      <Tabs.Screen
-        name="expenditure"
-        options={{
-          title: 'Expenditure',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="receipt" size={size} color={color} />
-          ),
-        }}
-      />
+      {/* FEEDBACK #12: Investment second-to-last */}
       <Tabs.Screen
         name="investment"
         options={{
           title: 'Investment',
+          // FEEDBACK #11: Fixed investment icon (was showing 'close' before)
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="trending-up" size={size} color={color} />
           ),
         }}
       />
+      {/* FEEDBACK #12: WRX last */}
       <Tabs.Screen
         name="wrx"
         options={{
@@ -78,7 +78,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="notifications" size={size} color={color} />
           ),
-          tabBarBadge: undefined,
+          tabBarBadge: undefined, // Will add unread count later
         }}
       />
     </Tabs>
