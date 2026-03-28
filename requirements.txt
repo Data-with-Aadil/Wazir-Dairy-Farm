@@ -138,3 +138,4 @@ fastapi
 motor
 python-dotenv
 apscheduler
+httpx
