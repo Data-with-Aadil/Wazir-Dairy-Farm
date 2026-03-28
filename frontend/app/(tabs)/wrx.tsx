@@ -8,7 +8,7 @@ import {
   RefreshControl,
   Alert,
   TextInput,
-  ImageBackground,
+  ImageBackground, // FEEDBACK #9: Added import
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
@@ -19,6 +19,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useFocusEffect } from 'expo-router';
 import { format } from 'date-fns';
 
+// FEEDBACK #9: Added background image
+const BACKGROUND_IMAGE = require('../../assets/images/0vjmy7gj_1000044672.jpg');
 const BACKEND_URL = "https://wazir-dairy-farm.onrender.com";
 
 const QUICK_REACTIONS = [
@@ -56,7 +58,7 @@ export default function WRXScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [activeTab, setActiveTab] = useState<'notifications' | 'events'>('notifications');
-  const scrollViewRef = useRef(null);
+  const scrollViewRef = useRef<ScrollView>(null);
 
   // Event form state
   const [description, setDescription] = useState('');
@@ -171,7 +173,7 @@ export default function WRXScreen() {
 
   const calculateReminderDate = (eventDate: Date, reminderType: string): string | undefined => {
     if (reminderType === 'none') return undefined;
-    
+
     const reminderDate = new Date(eventDate);
     switch (reminderType) {
       case '15_days':
@@ -374,295 +376,293 @@ export default function WRXScreen() {
   };
 
   return (
-    <ImageBackground
-      source={require('../../assets/background.jpg')}
-      style={styles.background}
-      resizeMode="cover"
-    >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.container}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.title}>WRX</Text>
-            <Text style={styles.subtitle}>Activity Feed</Text>
-          </View>
-          {unreadCount > 0 && (
-            <View style={styles.unreadBadge}>
-              <Text style={styles.unreadText}>{unreadCount} new</Text>
+    <ImageBackground source={BACKGROUND_IMAGE} style={styles.background} resizeMode="cover">
+      <View style={styles.overlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.container}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        >
+          {/* Header */}
+          <View style={styles.header}>
+            <View>
+              <Text style={styles.title}>WRX</Text>
+              <Text style={styles.subtitle}>Activity Feed</Text>
             </View>
-          )}
-        </View>
-
-        {/* Tab Switcher */}
-        <View style={styles.tabContainer}>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'notifications' && styles.activeTab]}
-            onPress={() => setActiveTab('notifications')}
-          >
-            <Text style={[styles.tabText, activeTab === 'notifications' && styles.activeTabText]}>
-              Notifications
-            </Text>
-            {unreadCount > 0 && activeTab !== 'notifications' && (
-              <View style={styles.redDot} />
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'events' && styles.activeTab]}
-            onPress={() => setActiveTab('events')}
-          >
-            <Text style={[styles.tabText, activeTab === 'events' && styles.activeTabText]}>
-              Events
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {activeTab === 'notifications' ? (
-          /* Notifications List */
-          <ScrollView
-            ref={scrollViewRef}
-            style={styles.content}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-            }
-            onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
-          >
-            {notifications.length === 0 ? (
-              <View style={styles.emptyState}>
-                <Ionicons name="notifications-off-outline" size={64} color="#D1D5DB" />
-                <Text style={styles.emptyText}>No activity yet</Text>
-                <Text style={styles.emptySubtext}>All updates will appear here</Text>
+            {unreadCount > 0 && (
+              <View style={styles.unreadBadge}>
+                <Text style={styles.unreadText}>{unreadCount} new</Text>
               </View>
-            ) : (
-              notifications.map((notif) => {
-                const isUnread = !notif.read_by.includes(user?.name || '');
-                const myReaction = notif.reactions?.[user?.name || ''];
-
-                return (
-                  <View
-                    key={notif._id}
-                    style={[
-                      styles.notificationCard,
-                      isUnread && styles.notificationUnread,
-                    ]}
-                  >
-                    <View style={styles.notificationHeader}>
-                      <View
-                        style={[
-                          styles.iconCircle,
-                          { backgroundColor: getTypeColor(notif.type) + '20' },
-                        ]}
-                      >
-                        <Ionicons
-                          name={getTypeIcon(notif.type)}
-                          size={20}
-                          color={getTypeColor(notif.type)}
-                        />
-                      </View>
-                      <View style={styles.messageContainer}>
-                        <Text style={styles.message}>{notif.message}</Text>
-                        <Text style={styles.time}>{formatTime(notif.created_at)}</Text>
-                      </View>
-                      {isUnread && <View style={styles.unreadDot} />}
-                    </View>
-
-                    {/* Quick Reactions */}
-                    <View style={styles.reactionsContainer}>
-                      <Text style={styles.reactionsLabel}>Quick Reply:</Text>
-                      <View style={styles.reactionButtons}>
-                        {QUICK_REACTIONS.map((reaction) => (
-                          <TouchableOpacity
-                            key={reaction.label}
-                            style={[
-                              styles.reactionButton,
-                              myReaction === reaction.emoji && styles.reactionButtonActive,
-                            ]}
-                            onPress={() => handleReaction(notif._id, reaction.emoji)}
-                          >
-                            <Text style={styles.reactionEmoji}>{reaction.emoji}</Text>
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-                    </View>
-
-                    {/* All Reactions Display */}
-                    {Object.keys(notif.reactions || {}).length > 0 && (
-                      <View style={styles.allReactions}>
-                        {Object.entries(notif.reactions || {}).map(([userName, emoji]) => (
-                          <View key={userName} style={styles.reactionChip}>
-                            <Text style={styles.reactionChipText}>
-                              {emoji} {userName}
-                            </Text>
-                          </View>
-                        ))}
-                      </View>
-                    )}
-                  </View>
-                );
-              })
             )}
-          </ScrollView>
-        ) : (
-          /* Events Tab */
-          <ScrollView
-            style={styles.content}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-            }
-          >
-            {/* Calendar */}
-            <View style={styles.calendarContainer}>
-              <Calendar
-                markedDates={markedDates}
-                onMonthChange={(month) => {
-                  setSelectedMonth(`${month.year}-${String(month.month).padStart(2, '0')}`);
-                }}
-                theme={{
-                  backgroundColor: 'transparent',
-                  calendarBackground: 'rgba(255, 255, 255, 0.95)',
-                  textSectionTitleColor: '#1F2937',
-                  selectedDayBackgroundColor: '#10B981',
-                  selectedDayTextColor: '#ffffff',
-                  todayTextColor: '#10B981',
-                  dayTextColor: '#1F2937',
-                  textDisabledColor: '#D1D5DB',
-                  dotColor: '#10B981',
-                  arrowColor: '#10B981',
-                }}
-              />
-            </View>
+          </View>
 
-            {/* Event Form */}
-            <View style={styles.formContainer}>
-              <Text style={styles.formTitle}>
-                {editingId ? 'Edit Event' : 'Add Event'}
+          {/* Tab Switcher */}
+          <View style={styles.tabContainer}>
+            <TouchableOpacity
+              style={[styles.tab, activeTab === 'notifications' && styles.activeTab]}
+              onPress={() => setActiveTab('notifications')}
+            >
+              <Text style={[styles.tabText, activeTab === 'notifications' && styles.activeTabText]}>
+                Notifications
               </Text>
-
-              {/* Description Input */}
-              <Text style={styles.label}>Description</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter event description"
-                placeholderTextColor="#999"
-                value={description}
-                onChangeText={setDescription}
-                multiline
-              />
-
-              {/* Date Picker */}
-              <Text style={styles.label}>Date</Text>
-              <TouchableOpacity
-                style={styles.dateButton}
-                onPress={() => setShowDatePicker(true)}
-              >
-                <Text style={styles.dateButtonText}>
-                  {eventDate.toLocaleDateString('en-GB')}
-                </Text>
-              </TouchableOpacity>
-
-              {showDatePicker && (
-                <DateTimePicker
-                  value={eventDate}
-                  mode="date"
-                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                  onChange={onDateChange}
-                />
+              {unreadCount > 0 && activeTab !== 'notifications' && (
+                <View style={styles.redDot} />
               )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tab, activeTab === 'events' && styles.activeTab]}
+              onPress={() => setActiveTab('events')}
+            >
+              <Text style={[styles.tabText, activeTab === 'events' && styles.activeTabText]}>
+                Events
+              </Text>
+            </TouchableOpacity>
+          </View>
 
-              {/* Reminder Picker */}
-              <Text style={styles.label}>Reminder</Text>
-              <View style={styles.reminderContainer}>
-                {['none', '15_days', '1_month', '2_months', '3_months'].map((option) => (
-                  <TouchableOpacity
-                    key={option}
-                    style={[
-                      styles.reminderOption,
-                      reminder === option && styles.reminderOptionActive,
-                    ]}
-                    onPress={() => setReminder(option)}
-                  >
-                    <Text
+          {activeTab === 'notifications' ? (
+            /* Notifications List */
+            <ScrollView
+              ref={scrollViewRef}
+              style={styles.content}
+              refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+              }
+              onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
+            >
+              {notifications.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Ionicons name="notifications-off-outline" size={64} color="#D1D5DB" />
+                  <Text style={styles.emptyText}>No activity yet</Text>
+                  <Text style={styles.emptySubtext}>All updates will appear here</Text>
+                </View>
+              ) : (
+                notifications.map((notif) => {
+                  const isUnread = !notif.read_by.includes(user?.name || '');
+                  const myReaction = notif.reactions?.[user?.name || ''];
+
+                  return (
+                    <View
+                      key={notif._id}
                       style={[
-                        styles.reminderOptionText,
-                        reminder === option && styles.reminderOptionTextActive,
+                        styles.notificationCard,
+                        isUnread && styles.notificationUnread,
                       ]}
                     >
-                      {option === 'none' ? 'None' : option.replace('_', ' ')}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                      <View style={styles.notificationHeader}>
+                        <View
+                          style={[
+                            styles.iconCircle,
+                            { backgroundColor: getTypeColor(notif.type) + '20' },
+                          ]}
+                        >
+                          <Ionicons
+                            name={getTypeIcon(notif.type) as any}
+                            size={20}
+                            color={getTypeColor(notif.type)}
+                          />
+                        </View>
+                        <View style={styles.messageContainer}>
+                          <Text style={styles.message}>{notif.message}</Text>
+                          <Text style={styles.time}>{formatTime(notif.created_at)}</Text>
+                        </View>
+                        {isUnread && <View style={styles.unreadDot} />}
+                      </View>
+
+                      {/* Quick Reactions */}
+                      <View style={styles.reactionsContainer}>
+                        <Text style={styles.reactionsLabel}>Quick Reply:</Text>
+                        <View style={styles.reactionButtons}>
+                          {QUICK_REACTIONS.map((reaction) => (
+                            <TouchableOpacity
+                              key={reaction.label}
+                              style={[
+                                styles.reactionButton,
+                                myReaction === reaction.emoji && styles.reactionButtonActive,
+                              ]}
+                              onPress={() => handleReaction(notif._id, reaction.emoji)}
+                            >
+                              <Text style={styles.reactionEmoji}>{reaction.emoji}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </View>
+
+                      {/* All Reactions Display */}
+                      {Object.keys(notif.reactions || {}).length > 0 && (
+                        <View style={styles.allReactions}>
+                          {Object.entries(notif.reactions || {}).map(([userName, emoji]) => (
+                            <View key={userName} style={styles.reactionChip}>
+                              <Text style={styles.reactionChipText}>
+                                {emoji} {userName}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      )}
+                    </View>
+                  );
+                })
+              )}
+            </ScrollView>
+          ) : (
+            /* Events Tab */
+            <ScrollView
+              style={styles.content}
+              refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+              }
+            >
+              {/* Calendar */}
+              <View style={styles.calendarContainer}>
+                <Calendar
+                  markedDates={markedDates}
+                  onMonthChange={(month) => {
+                    setSelectedMonth(`${month.year}-${String(month.month).padStart(2, '0')}`);
+                  }}
+                  theme={{
+                    backgroundColor: 'transparent',
+                    calendarBackground: 'rgba(255, 255, 255, 0.95)',
+                    textSectionTitleColor: '#1F2937',
+                    selectedDayBackgroundColor: '#10B981',
+                    selectedDayTextColor: '#ffffff',
+                    todayTextColor: '#10B981',
+                    dayTextColor: '#1F2937',
+                    textDisabledColor: '#D1D5DB',
+                    dotColor: '#10B981',
+                    arrowColor: '#10B981',
+                  }}
+                />
               </View>
 
-              {/* Submit Button */}
-              <TouchableOpacity style={styles.submitButton} onPress={handleSubmitEvent}>
-                <Text style={styles.submitButtonText}>
-                  {editingId ? 'Update Event' : 'Add Event'}
+              {/* Event Form */}
+              <View style={styles.formContainer}>
+                <Text style={styles.formTitle}>
+                  {editingId ? 'Edit Event' : 'Add Event'}
                 </Text>
-              </TouchableOpacity>
 
-              {editingId && (
+                {/* Description Input */}
+                <Text style={styles.label}>Description</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter event description"
+                  placeholderTextColor="#999"
+                  value={description}
+                  onChangeText={setDescription}
+                  multiline
+                />
+
+                {/* Date Picker */}
+                <Text style={styles.label}>Date</Text>
                 <TouchableOpacity
-                  style={styles.cancelButton}
-                  onPress={() => {
-                    setEditingId(null);
-                    setDescription('');
-                    setEventDate(new Date());
-                    setReminder('none');
-                  }}
+                  style={styles.dateButton}
+                  onPress={() => setShowDatePicker(true)}
                 >
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                  <Text style={styles.dateButtonText}>
+                    {eventDate.toLocaleDateString('en-GB')}
+                  </Text>
                 </TouchableOpacity>
-              )}
-            </View>
 
-            {/* Events List (Filtered by Month) */}
-            <View style={styles.listContainer}>
-              <Text style={styles.listTitle}>
-                Events - {new Date(selectedMonth + '-01').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}
-              </Text>
-              {filteredEvents.length === 0 ? (
-                <Text style={styles.emptyText}>No events for this month</Text>
-              ) : (
-                filteredEvents.map((event) => (
-                  <View key={event._id} style={styles.eventCard}>
-                    <View style={styles.eventInfo}>
-                      <View style={styles.eventHeader}>
-                        <Text style={styles.eventDescription}>{event.description}</Text>
-                        {event.reminder && (
-                          <View style={styles.reminderBadge}>
-                            <Text style={styles.reminderBadgeText}>
-                              {getReminderLabel(event.reminder)}
-                            </Text>
-                          </View>
-                        )}
+                {showDatePicker && (
+                  <DateTimePicker
+                    value={eventDate}
+                    mode="date"
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onChange={onDateChange}
+                  />
+                )}
+
+                {/* Reminder Picker */}
+                <Text style={styles.label}>Reminder</Text>
+                <View style={styles.reminderContainer}>
+                  {['none', '15_days', '1_month', '2_months', '3_months'].map((option) => (
+                    <TouchableOpacity
+                      key={option}
+                      style={[
+                        styles.reminderOption,
+                        reminder === option && styles.reminderOptionActive,
+                      ]}
+                      onPress={() => setReminder(option)}
+                    >
+                      <Text
+                        style={[
+                          styles.reminderOptionText,
+                          reminder === option && styles.reminderOptionTextActive,
+                        ]}
+                      >
+                        {option === 'none' ? 'None' : option.replace('_', ' ')}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {/* Submit Button */}
+                <TouchableOpacity style={styles.submitButton} onPress={handleSubmitEvent}>
+                  <Text style={styles.submitButtonText}>
+                    {editingId ? 'Update Event' : 'Add Event'}
+                  </Text>
+                </TouchableOpacity>
+
+                {editingId && (
+                  <TouchableOpacity
+                    style={styles.cancelButton}
+                    onPress={() => {
+                      setEditingId(null);
+                      setDescription('');
+                      setEventDate(new Date());
+                      setReminder('none');
+                    }}
+                  >
+                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Events List (Filtered by Month) */}
+              <View style={styles.listContainer}>
+                <Text style={styles.listTitle}>
+                  Events - {new Date(selectedMonth + '-01').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}
+                </Text>
+                {filteredEvents.length === 0 ? (
+                  <Text style={styles.emptyText}>No events for this month</Text>
+                ) : (
+                  filteredEvents.map((event) => (
+                    <View key={event._id} style={styles.eventCard}>
+                      <View style={styles.eventInfo}>
+                        <View style={styles.eventHeader}>
+                          <Text style={styles.eventDescription}>{event.description}</Text>
+                          {event.reminder && (
+                            <View style={styles.reminderBadge}>
+                              <Text style={styles.reminderBadgeText}>
+                                {getReminderLabel(event.reminder)}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text style={styles.eventDate}>{formatDate(event.date)}</Text>
+                        <Text style={styles.eventCreator}>By: {event.created_by}</Text>
                       </View>
-                      <Text style={styles.eventDate}>{formatDate(event.date)}</Text>
-                      <Text style={styles.eventCreator}>By: {event.created_by}</Text>
+                      <View style={styles.actions}>
+                        <TouchableOpacity
+                          style={styles.actionButton}
+                          onPress={() => handleEditEvent(event)}
+                        >
+                          <Text style={styles.actionButtonText}>Edit</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.actionButton}
+                          onPress={() => handleDeleteEvent(event._id)}
+                        >
+                          <Text style={styles.actionButtonText}>Delete</Text>
+                        </TouchableOpacity>
+                      </View>
                     </View>
-                    <View style={styles.actions}>
-                      <TouchableOpacity
-                        style={styles.actionButton}
-                        onPress={() => handleEditEvent(event)}
-                      >
-                        <Text style={styles.actionButtonText}>Edit</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.actionButton}
-                        onPress={() => handleDeleteEvent(event._id)}
-                      >
-                        <Text style={styles.actionButtonText}>Delete</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ))
-              )}
-            </View>
-          </ScrollView>
-        )}
-      </KeyboardAvoidingView>
+                  ))
+                )}
+              </View>
+            </ScrollView>
+          )}
+        </KeyboardAvoidingView>
+      </View>
     </ImageBackground>
   );
 }
@@ -672,6 +672,11 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     height: '100%',
+  },
+  // FEEDBACK #9: Added overlay style
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
   },
   container: {
     flex: 1,
