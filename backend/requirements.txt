@@ -17,3 +17,4 @@ uvicorn
 motor
 python-dotenv
 apscheduler
+httpx
