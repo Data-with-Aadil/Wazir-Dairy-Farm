@@ -1,9 +1,9 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
-import Constants from 'expo-constants'; // ✅ Add this import
+import Constants from 'expo-constants';
 
 const BACKEND_URL = "https://wazir-dairy-farm.onrender.com";
 
@@ -29,6 +29,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isOnline, setIsOnline] = useState(true);
   const [expoPushToken, setExpoPushToken] = useState('');
+  const notificationListener = useRef<any>();
 
   useEffect(() => {
     loadUser();
@@ -38,6 +39,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setupNotifications();
       registerForPushNotifications();
     }
+
+    return () => {
+      if (notificationListener.current) {
+        notificationListener.current.remove();
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -46,7 +53,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isOnline]);
 
-  // ✅ FIX #3: Send token to backend whenever it's obtained
   useEffect(() => {
     if (expoPushToken && user) {
       sendTokenToBackend(user.name, expoPushToken);
@@ -54,15 +60,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [expoPushToken, user]);
 
   const setupNotifications = async () => {
-    const Notifications = await import('expo-notifications') as any;
+    try {
+      const Notifications = await import('expo-notifications');
 
-    Notifications.setNotificationHandler({
-      handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldPlaySound: true,
-        shouldSetBadge: true,
-      }),
-    });
+      // ✅ CRITICAL: Set up notification channels for Android
+      if (Platform.OS === 'android') {
+        await Notifications.setNotificationChannelAsync('default', {
+          name: 'Default Notifications',
+          importance: Notifications.AndroidImportance.MAX,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: '#10B981',
+          sound: 'default',
+          enableVibrate: true,
+          enableLights: true,
+          showBadge: true,
+        });
+        console.log('✅ Android notification channel created');
+      }
+
+      // Handle foreground notifications
+      Notifications.setNotificationHandler({
+        handleNotification: async () => ({
+          shouldShowAlert: true,
+          shouldPlaySound: true,
+          shouldSetBadge: true,
+        }),
+      });
+
+      // Listen for received notifications
+      notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
+        console.log('✅ Notification received:', notification);
+      });
+
+      console.log('✅ Notification handlers set up');
+    } catch (error) {
+      console.error('❌ Notification setup error:', error);
+    }
   };
 
   const setupNetworkListener = () => {
@@ -73,16 +106,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const registerForPushNotifications = async () => {
-    if (Platform.OS === 'web') return;
-
-    const Notifications = await import('expo-notifications');
-
-    if (!Device.isDevice) {
-      console.log('Push notifications only work on physical devices');
+    if (Platform.OS === 'web') {
+      console.log('⚠️ Push notifications not supported on web');
       return;
     }
 
     try {
+      const Notifications = await import('expo-notifications');
+
+      if (!Device.isDevice) {
+        console.log('⚠️ Push notifications only work on physical devices');
+        return;
+      }
+
+      console.log('🔔 Requesting notification permissions...');
+
       const { status: existingStatus } = await Notifications.getPermissionsAsync();
       let finalStatus = existingStatus;
 
@@ -92,29 +130,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (finalStatus !== 'granted') {
-        console.log('Failed to get push token');
+        console.log('❌ Notification permission denied');
         return;
       }
 
-      // ✅ FIX #1: Add projectId for SDK 48+
-      const projectId = Constants.expoConfig?.extra?.eas?.projectId || 
+      console.log('✅ Notification permission granted');
+
+      const projectId = Constants.expoConfig?.extra?.eas?.projectId ||
                        Constants.easConfig?.projectId;
+
+      if (!projectId) {
+        console.warn('⚠️ No projectId found');
+      }
 
       const token = await Notifications.getExpoPushTokenAsync({
         projectId: projectId
       });
-      
+
       console.log('✅ Push token obtained:', token.data);
       setExpoPushToken(token.data);
     } catch (error) {
-      console.error('Push token error:', error);
+      console.error('❌ Push token error:', error);
     }
   };
 
-  // ✅ FIX #2 & #3: Separate function to send token to backend
   const sendTokenToBackend = async (userName: string, token: string) => {
     try {
-      await fetch(`${BACKEND_URL}/api/auth/update-push-token`, {
+      console.log(`📤 Sending token to backend for ${userName}...`);
+      const response = await fetch(`${BACKEND_URL}/api/auth/update-push-token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -122,9 +165,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           expo_push_token: token,
         }),
       });
-      console.log('✅ Token sent to backend for', userName);
+
+      if (response.ok) {
+        console.log('✅ Token sent to backend successfully');
+      } else {
+        console.error('❌ Failed to send token:', await response.text());
+      }
     } catch (error) {
-      console.error('Failed to send token to backend:', error);
+      console.error('❌ Error sending token to backend:', error);
     }
   };
 
@@ -153,10 +201,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const data = await response.json();
         await AsyncStorage.setItem('user', JSON.stringify(data.user));
         setUser(data.user);
-
-        // ✅ FIX #2: Token will be sent via useEffect, no need here
-        // The useEffect above will automatically send token when user state updates
-
         return true;
       }
       return false;
