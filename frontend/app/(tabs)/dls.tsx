@@ -19,7 +19,6 @@ import { Picker } from '@react-native-picker/picker';
 import { useAuth } from '../../context/AuthContext';
 import { useFocusEffect } from 'expo-router';
 
-// FEEDBACK #3 & #9: Add background image
 const BACKGROUND_IMAGE = require('../../assets/images/0vjmy7gj_1000044672.jpg');
 const BACKEND_URL = "https://wazir-dairy-farm.onrender.com";
 
@@ -45,7 +44,6 @@ export default function DLSScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const scrollViewRef = React.useRef<ScrollView>(null);
 
-  // Edit mode states
   const [editMode, setEditMode] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -56,7 +54,6 @@ export default function DLSScreen() {
   const [date, setDate] = useState(currentDate.toISOString().split('T')[0]);
   const [notes, setNotes] = useState('');
 
-  // Scroll to top when tab is focused
   useFocusEffect(
     React.useCallback(() => {
       scrollViewRef.current?.scrollTo({ y: 0, animated: false });
@@ -178,7 +175,6 @@ export default function DLSScreen() {
     }
   };
 
-  // FEEDBACK #12: Delete confirmation already exists
   const handleDelete = async (id: string) => {
     Alert.alert('Delete Entry', 'Are you sure you want to delete this entry?', [
       { text: 'Cancel', style: 'cancel' },
@@ -223,17 +219,15 @@ export default function DLSScreen() {
   return (
     <ImageBackground source={BACKGROUND_IMAGE} style={styles.background} resizeMode="cover">
       <View style={styles.overlay}>
-        {/* FEEDBACK #13: KeyboardAvoidingView */}
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.container}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
         >
           {/* Header */}
           <View style={styles.header}>
             <View>
-              <Text style={styles.title}>Dairy Lock Sales</Text>
-              <Text style={styles.subtitle}>Actual Payments Received</Text>
+              <Text style={styles.title} numberOfLines={1}>Dairy Lock Sales</Text>
+              <Text style={styles.subtitle} numberOfLines={1}>Actual Payments Received</Text>
             </View>
             <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.addButton}>
               <Ionicons name="add" size={24} color="#fff" />
@@ -244,9 +238,7 @@ export default function DLSScreen() {
           <ScrollView
             ref={scrollViewRef}
             style={styles.content}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-            }
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           >
             {dlsList.length === 0 ? (
               <View style={styles.emptyState}>
@@ -260,21 +252,24 @@ export default function DLSScreen() {
                   <View style={styles.cardRow}>
                     <View style={styles.cardLeft}>
                       <View style={styles.monthBadge}>
-                        <Text style={styles.monthText}>{getMonthName(dls.month)}</Text>
-                        <Text style={styles.yearText}>{dls.year}</Text>
+                        <Text style={styles.monthText} numberOfLines={1}>{getMonthName(dls.month)}</Text>
+                        <Text style={styles.yearText} numberOfLines={1}>{dls.year}</Text>
                       </View>
                     </View>
                     <View style={styles.cardCenter}>
-                      <Text style={styles.cardAmount}>₹{dls.amount.toLocaleString('en-IN')}</Text>
-                      <Text style={styles.cardDate}>Received on {dls.date}</Text>
-                      {dls.notes && <Text style={styles.cardNotes}>{dls.notes}</Text>}
+                      <Text style={[styles.cardAmount, styles.noWrap]} numberOfLines={1}>
+                        ₹{dls.amount.toLocaleString('en-IN')}
+                      </Text>
+                      <Text style={styles.cardDate} numberOfLines={1}>Received on {dls.date}</Text>
+                      {dls.notes && <Text style={styles.cardNotes} numberOfLines={2}>{dls.notes}</Text>}
                     </View>
-                    <View style={{ gap: 8 }}>
-                      <TouchableOpacity onPress={() => handleEdit(dls)} style={styles.editButton}>
-                        <Ionicons name="create-outline" size={20} color="#3B82F6" />
+                    {/* FEEDBACK #1: Transparent buttons with border */}
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      <TouchableOpacity onPress={() => handleEdit(dls)} style={styles.editIconButton}>
+                        <Ionicons name="create-outline" size={18} color="#3B82F6" />
                       </TouchableOpacity>
-                      <TouchableOpacity onPress={() => handleDelete(dls._id)} style={styles.deleteButton}>
-                        <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                      <TouchableOpacity onPress={() => handleDelete(dls._id)} style={styles.deleteIconButton}>
+                        <Ionicons name="trash-outline" size={18} color="#EF4444" />
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -284,19 +279,11 @@ export default function DLSScreen() {
           </ScrollView>
 
           {/* Add/Edit Modal */}
-          <Modal
-            visible={modalVisible}
-            animationType="slide"
-            transparent={true}
-            onRequestClose={closeModal}
-          >
-            <KeyboardAvoidingView
-              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-              style={styles.modalOverlay}
-            >
+          <Modal visible={modalVisible} transparent animationType="slide">
+            <View style={styles.modalOverlay}>
               <View style={styles.modalContent}>
                 <View style={styles.modalHeader}>
-                  <Text style={styles.modalTitle}>
+                  <Text style={styles.modalTitle} numberOfLines={1}>
                     {editMode ? 'Edit Payment' : 'Add Payment'}
                   </Text>
                   <TouchableOpacity onPress={closeModal}>
@@ -314,7 +301,7 @@ export default function DLSScreen() {
                         style={styles.picker}
                       >
                         {MONTHS.map((m, idx) => (
-                          <Picker.Item key={m} label={m} value={(idx + 1).toString()} />
+                          <Picker.Item key={idx} label={m} value={(idx + 1).toString()} />
                         ))}
                       </Picker>
                     </View>
@@ -341,8 +328,8 @@ export default function DLSScreen() {
                       style={styles.input}
                       value={amount}
                       onChangeText={setAmount}
-                      placeholder="0"
                       keyboardType="numeric"
+                      placeholder="0"
                     />
                   </View>
 
@@ -359,30 +346,29 @@ export default function DLSScreen() {
                   <View style={styles.formGroup}>
                     <Text style={styles.label}>Notes (Optional)</Text>
                     <TextInput
-                      style={styles.input}
+                      style={[styles.input, { minHeight: 60 }]}
                       value={notes}
                       onChangeText={setNotes}
-                      placeholder="Optional notes"
+                      placeholder="Optional"
                       multiline
                     />
                   </View>
-
-                  <TouchableOpacity
-                    style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-                    onPress={editMode ? handleUpdateDLS : handleAddDLS}
-                    disabled={loading}
-                  >
-                    {loading ? (
-                      <ActivityIndicator color="#fff" />
-                    ) : (
-                      <Text style={styles.submitButtonText}>
-                        {editMode ? 'Update Payment' : 'Add Payment'}
-                      </Text>
-                    )}
-                  </TouchableOpacity>
                 </ScrollView>
+
+                {loading ? (
+                  <ActivityIndicator size="large" color="#10B981" style={{ marginTop: 20 }} />
+                ) : (
+                  <TouchableOpacity
+                    onPress={editMode ? handleUpdateDLS : handleAddDLS}
+                    style={styles.submitButton}
+                  >
+                    <Text style={styles.submitButtonText}>
+                      {editMode ? 'Update Payment' : 'Add Payment'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
-            </KeyboardAvoidingView>
+            </View>
           </Modal>
         </KeyboardAvoidingView>
       </View>
@@ -391,7 +377,6 @@ export default function DLSScreen() {
 }
 
 const styles = StyleSheet.create({
-  // FEEDBACK #3 & #9: Transparent background
   background: {
     flex: 1,
     width: '100%',
@@ -416,12 +401,12 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E5E7EB',
   },
   title: {
-    fontSize: 24,
+    fontSize: 22, // FEEDBACK #3
     fontWeight: 'bold',
     color: '#1F2937',
   },
   subtitle: {
-    fontSize: 12,
+    fontSize: 11, // FEEDBACK #3
     color: '#6B7280',
     marginTop: 2,
   },
@@ -443,20 +428,20 @@ const styles = StyleSheet.create({
     paddingTop: 100,
   },
   emptyText: {
-    fontSize: 18,
+    fontSize: 16, // FEEDBACK #3
     fontWeight: '600',
     color: '#6B7280',
     marginTop: 16,
   },
   emptySubtext: {
-    fontSize: 14,
+    fontSize: 13, // FEEDBACK #3
     color: '#9CA3AF',
     marginTop: 8,
   },
   card: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 12,
-    padding: 16,
+    padding: 14, // FEEDBACK #3
     marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -469,23 +454,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cardLeft: {
-    marginRight: 16,
+    marginRight: 12,
   },
   monthBadge: {
     backgroundColor: '#F0FDF4',
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 8,
     alignItems: 'center',
     minWidth: 70,
   },
   monthText: {
-    fontSize: 12,
+    fontSize: 11, // FEEDBACK #3
     fontWeight: '600',
     color: '#059669',
   },
   yearText: {
-    fontSize: 16,
+    fontSize: 15, // FEEDBACK #3
     fontWeight: 'bold',
     color: '#10B981',
     marginTop: 2,
@@ -494,26 +479,35 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   cardAmount: {
-    fontSize: 22,
+    fontSize: 20, // FEEDBACK #3
     fontWeight: 'bold',
     color: '#1F2937',
     marginBottom: 4,
   },
   cardDate: {
-    fontSize: 12,
+    fontSize: 11, // FEEDBACK #3
     color: '#6B7280',
   },
   cardNotes: {
-    fontSize: 12,
+    fontSize: 11, // FEEDBACK #3
     color: '#9CA3AF',
     marginTop: 4,
     fontStyle: 'italic',
   },
-  editButton: {
+  // FEEDBACK #1: Transparent buttons
+  editIconButton: {
     padding: 8,
+    backgroundColor: 'transparent',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#3B82F6',
   },
-  deleteButton: {
+  deleteIconButton: {
     padding: 8,
+    backgroundColor: 'transparent',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#EF4444',
   },
   modalOverlay: {
     flex: 1,
@@ -534,7 +528,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 18, // FEEDBACK #3
     fontWeight: 'bold',
     color: '#1F2937',
   },
@@ -542,7 +536,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   label: {
-    fontSize: 14,
+    fontSize: 13, // FEEDBACK #3
     fontWeight: '600',
     color: '#374151',
     marginBottom: 8,
@@ -554,7 +548,7 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
     paddingVertical: 12,
     paddingHorizontal: 16,
-    fontSize: 16,
+    fontSize: 15, // FEEDBACK #3
     color: '#1F2937',
   },
   pickerContainer: {
@@ -579,7 +573,11 @@ const styles = StyleSheet.create({
   },
   submitButtonText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 15, // FEEDBACK #3
     fontWeight: '600',
+  },
+  // FEEDBACK #3: Prevent number wrapping
+  noWrap: {
+    flexShrink: 0,
   },
 });
