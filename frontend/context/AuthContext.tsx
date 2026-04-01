@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants'; // ✅ Add this import
 
 const BACKEND_URL = "https://wazir-dairy-farm.onrender.com";
 
@@ -27,7 +28,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isOnline, setIsOnline] = useState(true);
-  const [expoPushToken, setExpoPushToken] = useState<string>('');
+  const [expoPushToken, setExpoPushToken] = useState('');
 
   useEffect(() => {
     loadUser();
@@ -45,8 +46,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isOnline]);
 
+  // ✅ FIX #3: Send token to backend whenever it's obtained
+  useEffect(() => {
+    if (expoPushToken && user) {
+      sendTokenToBackend(user.name, expoPushToken);
+    }
+  }, [expoPushToken, user]);
+
   const setupNotifications = async () => {
-    // Dynamic import for expo-notifications
     const Notifications = await import('expo-notifications') as any;
 
     Notifications.setNotificationHandler({
@@ -89,10 +96,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      const token = await Notifications.getExpoPushTokenAsync();
+      // ✅ FIX #1: Add projectId for SDK 48+
+      const projectId = Constants.expoConfig?.extra?.eas?.projectId || 
+                       Constants.easConfig?.projectId;
+
+      const token = await Notifications.getExpoPushTokenAsync({
+        projectId: projectId
+      });
+      
+      console.log('✅ Push token obtained:', token.data);
       setExpoPushToken(token.data);
     } catch (error) {
       console.error('Push token error:', error);
+    }
+  };
+
+  // ✅ FIX #2 & #3: Separate function to send token to backend
+  const sendTokenToBackend = async (userName: string, token: string) => {
+    try {
+      await fetch(`${BACKEND_URL}/api/auth/update-push-token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: userName,
+          expo_push_token: token,
+        }),
+      });
+      console.log('✅ Token sent to backend for', userName);
+    } catch (error) {
+      console.error('Failed to send token to backend:', error);
     }
   };
 
@@ -122,16 +154,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await AsyncStorage.setItem('user', JSON.stringify(data.user));
         setUser(data.user);
 
-        if (expoPushToken) {
-          await fetch(`${BACKEND_URL}/api/auth/update-push-token`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              name,
-              expo_push_token: expoPushToken,
-            }),
-          });
-        }
+        // ✅ FIX #2: Token will be sent via useEffect, no need here
+        // The useEffect above will automatically send token when user state updates
+
         return true;
       }
       return false;
