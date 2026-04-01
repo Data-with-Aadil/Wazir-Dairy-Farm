@@ -43,13 +43,13 @@ async def send_push_notification(from_user: str, title: str, body: str, data: Di
     try:
         other_user = "Imran" if from_user == "Aadil" else "Aadil"
         user_doc = await db.users.find_one({"name": other_user})
-
+        
         if not user_doc or not user_doc.get("expo_push_token"):
             logging.info(f"No push token for {other_user}")
             return
-
+        
         push_token = user_doc["expo_push_token"]
-
+        
         payload = {
             "to": push_token,
             "title": title,
@@ -59,7 +59,7 @@ async def send_push_notification(from_user: str, title: str, body: str, data: Di
             "priority": "high",
             "channelId": "default",
         }
-
+        
         async with httpx.AsyncClient() as client_http:
             response = await client_http.post(
                 'https://exp.host/--/api/v2/push/send',
@@ -77,12 +77,12 @@ async def check_event_reminders():
     try:
         today = datetime.now().date().isoformat()
         logging.info(f"Checking event reminders for {today}")
-
+        
         events = await db.events.find({
             "reminder_date": today,
             "deleted": False
         }).to_list(1000)
-
+        
         for event in events:
             title = "Event Reminder"
             body = f"Upcoming event: {event['description']} on {event['date']}"
@@ -91,14 +91,14 @@ async def check_event_reminders():
                 "type": "event_reminder",
                 "event_id": str(event["_id"])
             }
-
+            
             notif = Notification(
                 type="event_reminder",
                 data={"event": event},
                 message=body
             )
             await db.notifications.insert_one(notif.dict())
-
+            
             for user_name in ["Aadil", "Imran"]:
                 user_doc = await db.users.find_one({"name": user_name})
                 if user_doc and user_doc.get("expo_push_token"):
@@ -115,9 +115,9 @@ async def check_event_reminders():
                             },
                             headers={"Content-Type": "application/json"}
                         )
-
+            
             logging.info(f"Reminder sent for event: {event['description']}")
-
+        
     except Exception as e:
         logging.error(f"Error checking reminders: {e}")
 
@@ -225,7 +225,7 @@ async def setup_users():
     existing = await db.users.count_documents({})
     if existing > 0:
         return {"message": "Users already set up"}
-
+    
     users = [
         {"name": "Aadil", "pin": "1234", "phone": "+919340482240", "expo_push_token": None},
         {"name": "Imran", "pin": "5678", "phone": "+919669005006", "expo_push_token": None}
@@ -253,14 +253,14 @@ async def create_investment(investment: Investment):
         message=f"{investment.investor} added Investment - {investment.category} - ₹{investment.amount:,.0f} on {investment.date}"
     )
     await db.notifications.insert_one(notif.dict())
-
+    
     await send_push_notification(
         investment.investor,
         "New Investment Added",
         f"{investment.investor} added Investment - {investment.category} - ₹{investment.amount:,.0f}",
         {"screen": "wrx", "type": "investment"}
     )
-
+    
     return {"success": True, "id": str(result.inserted_id)}
 
 @api_router.put("/investments/{investment_id}")
@@ -275,14 +275,14 @@ async def update_investment(investment_id: str, investment: Investment):
         message=f"{investment.investor} updated Investment - {investment.category} - ₹{investment.amount:,.0f} on {investment.date}"
     )
     await db.notifications.insert_one(notif.dict())
-
+    
     await send_push_notification(
         investment.investor,
         "Investment Updated",
         f"{investment.investor} updated Investment - {investment.category} - ₹{investment.amount:,.0f}",
         {"screen": "wrx", "type": "investment"}
     )
-
+    
     return {"success": True}
 
 @api_router.get("/investments")
@@ -295,26 +295,26 @@ async def delete_investment(investment_id: str, user: str):
     inv = await db.investments.find_one({"_id": ObjectId(investment_id)})
     if not inv:
         raise HTTPException(status_code=404, detail="Investment not found")
-
+    
     await db.investments.update_one(
         {"_id": ObjectId(investment_id)},
         {"$set": {"deleted": True}}
     )
-
+    
     notif = Notification(
         type="deletion",
         data={"type": "investment", "id": investment_id},
         message=f"{user} removed Investment entry - {inv['category']} - ₹{inv['amount']:,.0f} on {inv['date']}"
     )
     await db.notifications.insert_one(notif.dict())
-
+    
     await send_push_notification(
         user,
         "Investment Deleted",
         f"{user} removed Investment - {inv['category']} - ₹{inv['amount']:,.0f}",
         {"screen": "wrx", "type": "deletion"}
     )
-
+    
     return {"success": True}
 
 # ==================== EXPENDITURE ENDPOINTS ====================
@@ -328,14 +328,14 @@ async def create_expenditure(expenditure: Expenditure):
         message=f"{expenditure.paid_by} added Expenditure - {expenditure.category}/{expenditure.subcategory} - ₹{expenditure.amount:,.0f} on {expenditure.date}"
     )
     await db.notifications.insert_one(notif.dict())
-
+    
     await send_push_notification(
         expenditure.paid_by,
         "New Expenditure Added",
         f"{expenditure.paid_by} added Expenditure - {expenditure.category}/{expenditure.subcategory} - ₹{expenditure.amount:,.0f}",
         {"screen": "wrx", "type": "expenditure"}
     )
-
+    
     return {"success": True, "id": str(result.inserted_id)}
 
 @api_router.get("/expenditures")
@@ -348,26 +348,26 @@ async def update_expenditure(expenditure_id: str, expenditure: Expenditure, user
     exp = await db.expenditures.find_one({"_id": ObjectId(expenditure_id)})
     if not exp:
         raise HTTPException(status_code=404, detail="Expenditure not found")
-
+    
     await db.expenditures.update_one(
         {"_id": ObjectId(expenditure_id)},
         {"$set": expenditure.dict(exclude_unset=True)}
     )
-
+    
     notif = Notification(
         type="expenditure",
         data=expenditure.dict(),
         message=f"{user} updated Expenditure - {expenditure.category}/{expenditure.subcategory} - ₹{expenditure.amount:,.0f} on {expenditure.date}"
     )
     await db.notifications.insert_one(notif.dict())
-
+    
     await send_push_notification(
         user,
         "Expenditure Updated",
         f"{user} updated Expenditure - {expenditure.category}/{expenditure.subcategory} - ₹{expenditure.amount:,.0f}",
         {"screen": "wrx", "type": "expenditure"}
     )
-
+    
     return {"success": True}
 
 @api_router.delete("/expenditures/{expenditure_id}")
@@ -375,26 +375,26 @@ async def delete_expenditure(expenditure_id: str, user: str):
     exp = await db.expenditures.find_one({"_id": ObjectId(expenditure_id)})
     if not exp:
         raise HTTPException(status_code=404, detail="Expenditure not found")
-
+    
     await db.expenditures.update_one(
         {"_id": ObjectId(expenditure_id)},
         {"$set": {"deleted": True}}
     )
-
+    
     notif = Notification(
         type="deletion",
         data={"type": "expenditure", "id": expenditure_id},
         message=f"{user} removed Expenditure entry - {exp['category']}/{exp['subcategory']} - ₹{exp['amount']:,.0f} on {exp['date']}"
     )
     await db.notifications.insert_one(notif.dict())
-
+    
     await send_push_notification(
         user,
         "Expenditure Deleted",
         f"{user} removed Expenditure - {exp['category']}/{exp['subcategory']} - ₹{exp['amount']:,.0f}",
         {"screen": "wrx", "type": "deletion"}
     )
-
+    
     return {"success": True}
 
 # ==================== MILK SALES ENDPOINTS ====================
@@ -408,14 +408,14 @@ async def create_milk_sale(sale: MilkSale):
         message=f"Milk Sale added for {sale.date} - {sale.volume}L at {sale.fat_percentage}% fat, Rate: ₹{sale.rate} = ₹{sale.earnings:,.0f}"
     )
     await db.notifications.insert_one(notif.dict())
-
+    
     await send_push_notification(
         "System",
         "New Milk Sale",
         f"Milk Sale added for {sale.date} - ₹{sale.earnings:,.0f}",
         {"screen": "wrx", "type": "milk_sale"}
     )
-
+    
     return {"success": True, "id": str(result.inserted_id)}
 
 @api_router.get("/milk-sales")
@@ -428,26 +428,26 @@ async def update_milk_sale(sale_id: str, sale: MilkSale, user: str):
     existing_sale = await db.milk_sales.find_one({"_id": ObjectId(sale_id)})
     if not existing_sale:
         raise HTTPException(status_code=404, detail="Milk sale not found")
-
+    
     await db.milk_sales.update_one(
         {"_id": ObjectId(sale_id)},
         {"$set": sale.dict(exclude_unset=True)}
     )
-
+    
     notif = Notification(
         type="milk_sale",
         data=sale.dict(),
         message=f"{user} updated Milk Sale for {sale.date} - {sale.volume}L at {sale.fat_percentage}% fat = ₹{sale.earnings:,.0f}"
     )
     await db.notifications.insert_one(notif.dict())
-
+    
     await send_push_notification(
         user,
         "Milk Sale Updated",
         f"{user} updated Milk Sale for {sale.date} - ₹{sale.earnings:,.0f}",
         {"screen": "wrx", "type": "milk_sale"}
     )
-
+    
     return {"success": True}
 
 @api_router.delete("/milk-sales/{sale_id}")
@@ -455,26 +455,26 @@ async def delete_milk_sale(sale_id: str, user: str):
     sale = await db.milk_sales.find_one({"_id": ObjectId(sale_id)})
     if not sale:
         raise HTTPException(status_code=404, detail="Milk sale not found")
-
+    
     await db.milk_sales.update_one(
         {"_id": ObjectId(sale_id)},
         {"$set": {"deleted": True}}
     )
-
+    
     notif = Notification(
         type="deletion",
         data={"type": "milk_sale", "id": sale_id},
         message=f"{user} removed Milk Sale entry for {sale['date']}"
     )
     await db.notifications.insert_one(notif.dict())
-
+    
     await send_push_notification(
         user,
         "Milk Sale Deleted",
         f"{user} removed Milk Sale for {sale['date']}",
         {"screen": "wrx", "type": "deletion"}
     )
-
+    
     return {"success": True}
 
 # ==================== DAIRY LOCK SALES ENDPOINTS ====================
@@ -488,14 +488,14 @@ async def create_dls(dls: DairyLockSale):
         message=f"Dairy Lock Sale added for {dls.month}/{dls.year} - ₹{dls.amount:,.0f} on {dls.date}"
     )
     await db.notifications.insert_one(notif.dict())
-
+    
     await send_push_notification(
         "System",
         "New DLS Payment",
         f"Dairy Lock Sale added for {dls.month}/{dls.year} - ₹{dls.amount:,.0f}",
         {"screen": "wrx", "type": "dls"}
     )
-
+    
     return {"success": True, "id": str(result.inserted_id)}
 
 @api_router.get("/dairy-lock-sales")
@@ -508,26 +508,26 @@ async def update_dls(dls_id: str, dls: DairyLockSale, user: str):
     existing_dls = await db.dairy_lock_sales.find_one({"_id": ObjectId(dls_id)})
     if not existing_dls:
         raise HTTPException(status_code=404, detail="DLS not found")
-
+    
     await db.dairy_lock_sales.update_one(
         {"_id": ObjectId(dls_id)},
         {"$set": dls.dict(exclude_unset=True)}
     )
-
+    
     notif = Notification(
         type="dls",
         data=dls.dict(),
         message=f"{user} updated Dairy Lock Sale for {dls.month}/{dls.year} - ₹{dls.amount:,.0f} on {dls.date}"
     )
     await db.notifications.insert_one(notif.dict())
-
+    
     await send_push_notification(
         user,
         "DLS Updated",
         f"{user} updated Dairy Lock Sale for {dls.month}/{dls.year} - ₹{dls.amount:,.0f}",
         {"screen": "wrx", "type": "dls"}
     )
-
+    
     return {"success": True}
 
 @api_router.delete("/dairy-lock-sales/{dls_id}")
@@ -535,26 +535,26 @@ async def delete_dls(dls_id: str, user: str):
     dls = await db.dairy_lock_sales.find_one({"_id": ObjectId(dls_id)})
     if not dls:
         raise HTTPException(status_code=404, detail="DLS not found")
-
+    
     await db.dairy_lock_sales.update_one(
         {"_id": ObjectId(dls_id)},
         {"$set": {"deleted": True}}
     )
-
+    
     notif = Notification(
         type="deletion",
         data={"type": "dls", "id": dls_id},
         message=f"{user} removed Dairy Lock Sale entry for {dls['month']}/{dls['year']}"
     )
     await db.notifications.insert_one(notif.dict())
-
+    
     await send_push_notification(
         user,
         "DLS Deleted",
         f"{user} removed Dairy Lock Sale for {dls['month']}/{dls['year']}",
         {"screen": "wrx", "type": "deletion"}
     )
-
+    
     return {"success": True}
 
 # ==================== 🆕 BILLS ENDPOINTS (FEEDBACK #9) ====================
@@ -571,7 +571,7 @@ async def create_bill(bill: Bill):
         message=f"{bill.uploaded_by} uploaded Bill - {bill.description} - ₹{bill.amount:,.0f} on {bill.date}"
     )
     await db.notifications.insert_one(notif.dict())
-
+    
     # Send push notification
     await send_push_notification(
         bill.uploaded_by,
@@ -579,7 +579,7 @@ async def create_bill(bill: Bill):
         f"{bill.uploaded_by} uploaded Bill - {bill.description} - ₹{bill.amount:,.0f}",
         {"screen": "wrx", "type": "bill"}
     )
-
+    
     return {"success": True, "id": str(result.inserted_id)}
 
 @api_router.get("/bills")
@@ -594,12 +594,12 @@ async def delete_bill(bill_id: str, user: str):
     bill = await db.bills.find_one({"_id": ObjectId(bill_id)})
     if not bill:
         raise HTTPException(status_code=404, detail="Bill not found")
-
+    
     await db.bills.update_one(
         {"_id": ObjectId(bill_id)},
         {"$set": {"deleted": True}}
     )
-
+    
     # Create deletion notification
     notif = Notification(
         type="deletion",
@@ -607,7 +607,7 @@ async def delete_bill(bill_id: str, user: str):
         message=f"{user} removed Bill entry - {bill['description']} - ₹{bill['amount']:,.0f}"
     )
     await db.notifications.insert_one(notif.dict())
-
+    
     # Send push notification
     await send_push_notification(
         user,
@@ -615,7 +615,7 @@ async def delete_bill(bill_id: str, user: str):
         f"{user} removed Bill - {bill['description']}",
         {"screen": "wrx", "type": "deletion"}
     )
-
+    
     return {"success": True}
 
 # ==================== NOTIFICATION ENDPOINTS ====================
@@ -627,11 +627,11 @@ async def get_notifications(limit: int = 100):
     Get notifications from last 30 days
     """
     thirty_days_ago = datetime.utcnow() - timedelta(days=30)
-
+    
     notifications = await db.notifications.find(
         {"created_at": {"$gte": thirty_days_ago}}
     ).sort("created_at", -1).limit(limit).to_list(limit)
-
+    
     return [serialize_doc(notif) for notif in notifications]
 
 @api_router.post("/notifications/mark-read")
@@ -659,15 +659,15 @@ async def get_dashboard_stats():
     expenditures = await db.expenditures.find({"deleted": False}).to_list(1000)
     milk_sales = await db.milk_sales.find({"deleted": False}).to_list(1000)
     dls = await db.dairy_lock_sales.find({"deleted": False}).to_list(1000)
-
+    
     total_investment = sum(inv["amount"] for inv in investments)
     aadil_investment = sum(inv["amount"] for inv in investments if inv["investor"] == "Aadil")
     imran_investment = sum(inv["amount"] for inv in investments if inv["investor"] == "Imran")
-
+    
     total_expenditure = sum(exp["amount"] for exp in expenditures)
     total_earnings = sum(sale["earnings"] for sale in milk_sales)
     total_dls = sum(d["amount"] for d in dls)
-
+    
     return {
         "total_investment": total_investment,
         "aadil_investment": aadil_investment,
@@ -684,20 +684,20 @@ async def get_dashboard_stats():
 async def create_event(event: CalendarEvent):
     if len(event.description) > 15:
         event.description = event.description[:15]
-
+    
     result = await db.events.insert_one(event.dict())
-
+    
     notif_message = f"{event.created_by} created event: {event.description} on {event.date}"
     if event.reminder:
         notif_message += f" (Reminder: {event.reminder.replace('_', ' ')})"
-
+    
     notif = Notification(
         type="event_created",
         data=event.dict(),
         message=notif_message
     )
     await db.notifications.insert_one(notif.dict())
-
+    
     return {"success": True, "id": str(result.inserted_id)}
 
 @api_router.get("/events")
@@ -746,7 +746,7 @@ async def cleanup_test_data():
         await db.dairy_lock_sales.delete_many({})
         await db.bills.delete_many({})
         await db.notifications.delete_many({})
-
+        
         return {
             "message": "All test data cleaned up successfully",
             "deleted": {
@@ -785,10 +785,10 @@ async def startup_event():
         id="event_reminder_check",
         replace_existing=True
     )
-
+    
     # 🆕 FEEDBACK #16: Setup email reports (9 AM and 9 PM)
     setup_email_scheduler(scheduler)
-
+    
     scheduler.start()
     logging.info("✅ Scheduler started: Event reminders (9 AM) + Email reports (9 AM & 9 PM)")
 
