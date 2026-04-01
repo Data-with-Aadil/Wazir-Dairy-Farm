@@ -15,12 +15,18 @@ export default function RootLayout() {
     const setupNotificationHandler = async () => {
       try {
         const Notifications = await import('expo-notifications');
-        
+
+        // ✅ Handle notification clicks (even when app is closed)
         const subscription = Notifications.addNotificationResponseReceivedListener(response => {
-          const screen = response.notification.request.content.data?.screen;
-          
-          // Navigate to WRX tab when notification is clicked
-          if (screen === 'wrx') {
+          const data = response.notification.request.content.data;
+          const notificationType = data?.type;
+
+          // ✅ FEEDBACK #1: Route based on notification type
+          if (notificationType === 'event_reminder') {
+            // Event reminders → Dashboard
+            router.push('/(tabs)');
+          } else {
+            // All other activity notifications → WRX tab
             router.push('/(tabs)/wrx');
           }
         });
