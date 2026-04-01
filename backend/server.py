@@ -185,19 +185,20 @@ class Bill(BaseModel):
     created_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
 
 class Notification(BaseModel):
-    type: str
+    type: str  # 'investment', 'expenditure', 'milk_sale', 'dls', 'deletion', 'event_reminder', 'bill'
     data: Dict[str, Any]
     message: str
     read_by: List[str] = []
-    reactions: Dict[str, str] = {}
+    reactions: Dict[str, str] = {}  # {user: emoji}
     created_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
 
+# FEEDBACK #6: Updated CalendarEvent model with reminder fields
 class CalendarEvent(BaseModel):
-    date: str
-    description: str
+    date: str  # YYYY-MM-DD format
+    description: str  # max 15 chars
     created_by: str
     reminder: Optional[str] = None  # '15_days', '1_month', '3_months', '6_months', '1_year'
-    reminder_date: Optional[str] = None
+    reminder_date: Optional[str] = None  # Calculated date when reminder should trigger
     deleted: bool = False
     created_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
 
