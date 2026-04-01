@@ -173,23 +173,23 @@ export default function WRXScreen() {
 
   const calculateReminderDate = (eventDate: Date, reminderType: string): string | undefined => {
     if (reminderType === 'none') return undefined;
-    
+  
     const reminderDate = new Date(eventDate);
     switch (reminderType) {
       case '15_days':
-        reminderDate.setDate(reminderDate.getDate() - 15);
+        reminderDate.setDate(reminderDate.getDate() + 15);  // ✅ ADD 15 days
         break;
       case '1_month':
-        reminderDate.setMonth(reminderDate.getMonth() - 1);
+        reminderDate.setMonth(reminderDate.getMonth() + 1);  // ✅ ADD 1 month
         break;
       case '3_months':
-        reminderDate.setMonth(reminderDate.getMonth() - 3);
+        reminderDate.setMonth(reminderDate.getMonth() + 3);  // ✅ ADD 3 months
         break;
-      case '6_months':  // ADD THIS
-        reminderDate.setMonth(reminderDate.getMonth() - 6);
+      case '6_months':
+        reminderDate.setMonth(reminderDate.getMonth() + 6);  // ✅ ADD 6 months
         break;
-      case '1_year':  // ADD THIS
-        reminderDate.setFullYear(reminderDate.getFullYear() - 1);
+      case '1_year':
+        reminderDate.setFullYear(reminderDate.getFullYear() + 1);  // ✅ ADD 1 year
         break;
       default:
         return undefined;
