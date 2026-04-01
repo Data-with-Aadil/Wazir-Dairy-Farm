@@ -13,14 +13,16 @@ import {
   KeyboardAvoidingView,
   Platform,
   ImageBackground,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
-import DateTimePicker from '@react-native-community/datetimepicker'; // FEEDBACK #14
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useAuth } from '../../context/AuthContext';
 import { useFocusEffect } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 
-// FEEDBACK #3 & #9: Add background image
 const BACKGROUND_IMAGE = require('../../assets/images/0vjmy7gj_1000044672.jpg');
 const BACKEND_URL = "https://wazir-dairy-farm.onrender.com";
 
@@ -66,10 +68,23 @@ interface Expenditure {
   notes?: string;
 }
 
+interface Bill {
+  _id: string;
+  image: string; // base64
+  description: string;
+  amount?: number;
+  date: string;
+  uploaded_by: string;
+  created_at: string;
+}
+
 export default function ExpenditureScreen() {
   const { user } = useAuth();
   const [expenditures, setExpenditures] = useState<Expenditure[]>([]);
+  const [bills, setBills] = useState<Bill[]>([]);
+  const [activeTab, setActiveTab] = useState<'expenditures' | 'bills'>('expenditures');
   const [modalVisible, setModalVisible] = useState(false);
+  const [billModalVisible, setBillModalVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const scrollViewRef = React.useRef<ScrollView>(null);
@@ -80,14 +95,22 @@ export default function ExpenditureScreen() {
 
   // Form fields
   const [amount, setAmount] = useState('');
-  const [date, setDate] = useState(new Date()); // FEEDBACK #14: Changed to Date object
-  const [showDatePicker, setShowDatePicker] = useState(false); // FEEDBACK #14
+  const [date, setDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [paidBy, setPaidBy] = useState(user?.name || 'Aadil');
   const [category, setCategory] = useState('Supplements');
   const [subcategory, setSubcategory] = useState('Mineral Mixture');
   const [notes, setNotes] = useState('');
 
-  // Scroll to top when tab is focused
+  // FEEDBACK #9: Bill form fields
+  const [billImage, setBillImage] = useState('');
+  const [billDescription, setBillDescription] = useState('');
+  const [billAmount, setBillAmount] = useState('');
+
+  // FEEDBACK #5: Summary stats
+  const [aadilTotal, setAadilTotal] = useState(0);
+  const [imranTotal, setImranTotal] = useState(0);
+
   useFocusEffect(
     React.useCallback(() => {
       scrollViewRef.current?.scrollTo({ y: 0, animated: false });
@@ -96,7 +119,20 @@ export default function ExpenditureScreen() {
 
   useEffect(() => {
     fetchExpenditures();
+    fetchBills();
   }, []);
+
+  // FEEDBACK #5: Calculate summary
+  useEffect(() => {
+    const aadil = expenditures
+      .filter((e) => e.paid_by === 'Aadil')
+      .reduce((sum, e) => sum + e.amount, 0);
+    const imran = expenditures
+      .filter((e) => e.paid_by === 'Imran')
+      .reduce((sum, e) => sum + e.amount, 0);
+    setAadilTotal(aadil);
+    setImranTotal(imran);
+  }, [expenditures]);
 
   const fetchExpenditures = async () => {
     try {
@@ -110,17 +146,103 @@ export default function ExpenditureScreen() {
     }
   };
 
+  // FEEDBACK #9: Fetch bills
+  const fetchBills = async () => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/bills`);
+      if (response.ok) {
+        const data = await response.json();
+        setBills(data);
+      }
+    } catch (error) {
+      console.error('Error fetching bills:', error);
+    }
+  };
+
   const onRefresh = async () => {
     setRefreshing(true);
     await fetchExpenditures();
+    await fetchBills();
     setRefreshing(false);
   };
 
-  // FEEDBACK #14: Date picker handler
   const onDateChange = (event: any, selectedDate?: Date) => {
     setShowDatePicker(Platform.OS === 'ios');
     if (selectedDate) {
       setDate(selectedDate);
+    }
+  };
+
+  // FEEDBACK #9: Image picker with compression
+  const pickImage = async (useCamera: boolean) => {
+    try {
+      const { status } = useCamera
+        ? await ImagePicker.requestCameraPermissionsAsync()
+        : await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+      if (status !== 'granted') {
+        Alert.alert('Permission required', 'Please grant camera/gallery permission');
+        return;
+      }
+
+      const result = useCamera
+        ? await ImagePicker.launchCameraAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            quality: 0.5,
+          })
+        : await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            quality: 0.5,
+          });
+
+      if (!result.canceled && result.assets[0]) {
+        // Compress image
+        const manipulatedImage = await ImageManipulator.manipulateAsync(
+          result.assets[0].uri,
+          [{ resize: { width: 800 } }],
+          { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+        );
+
+        setBillImage(`data:image/jpeg;base64,${manipulatedImage.base64}`);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to pick image');
+    }
+  };
+
+  // FEEDBACK #9: Upload bill
+  const handleUploadBill = async () => {
+    if (!billImage) {
+      Alert.alert('Error', 'Please select an image');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/bills`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image: billImage,
+          description: billDescription.trim() || 'Bill',
+          amount: billAmount ? parseFloat(billAmount) : undefined,
+          date: date.toISOString().split('T')[0],
+          uploaded_by: user?.name || 'Unknown',
+        }),
+      });
+
+      if (response.ok) {
+        Alert.alert('Success', 'Bill uploaded successfully');
+        setBillModalVisible(false);
+        resetBillForm();
+        fetchBills();
+      } else {
+        Alert.alert('Error', 'Failed to upload bill');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to upload bill');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -143,7 +265,7 @@ export default function ExpenditureScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           amount: amt,
-          date: date.toISOString().split('T')[0], // FEEDBACK #14: Convert Date to string
+          date: date.toISOString().split('T')[0],
           paid_by: paidBy,
           category,
           subcategory,
@@ -168,7 +290,7 @@ export default function ExpenditureScreen() {
     setEditMode(true);
     setEditingId(expenditure._id);
     setAmount(expenditure.amount.toString());
-    setDate(new Date(expenditure.date)); // FEEDBACK #14: Convert string to Date
+    setDate(new Date(expenditure.date));
     setPaidBy(expenditure.paid_by);
     setCategory(expenditure.category);
     setSubcategory(expenditure.subcategory);
@@ -195,7 +317,7 @@ export default function ExpenditureScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           amount: amt,
-          date: date.toISOString().split('T')[0], // FEEDBACK #14
+          date: date.toISOString().split('T')[0],
           paid_by: paidBy,
           category,
           subcategory,
@@ -221,7 +343,6 @@ export default function ExpenditureScreen() {
     }
   };
 
-  // FEEDBACK #12: Delete confirmation already exists
   const handleDelete = async (id: string) => {
     if (!user?.name) {
       Alert.alert('Error', 'User not found');
@@ -252,13 +373,42 @@ export default function ExpenditureScreen() {
     ]);
   };
 
+  // FEEDBACK #9: Delete bill
+  const handleDeleteBill = async (id: string) => {
+    Alert.alert('Delete Bill', 'Are you sure?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            const res = await fetch(`${BACKEND_URL}/api/bills/${id}`, { method: 'DELETE' });
+            if (res.ok) {
+              Alert.alert('Deleted', 'Bill deleted successfully');
+              fetchBills();
+            }
+          } catch (err) {
+            Alert.alert('Error', 'Failed to delete bill');
+          }
+        },
+      },
+    ]);
+  };
+
   const resetForm = () => {
     setAmount('');
-    setDate(new Date()); // FEEDBACK #14
+    setDate(new Date());
     setPaidBy(user?.name || 'Aadil');
     setCategory('Supplements');
     setSubcategory(CATEGORIES['Supplements'][0]);
     setNotes('');
+  };
+
+  const resetBillForm = () => {
+    setBillImage('');
+    setBillDescription('');
+    setBillAmount('');
+    setDate(new Date());
   };
 
   const closeModal = () => {
@@ -271,82 +421,144 @@ export default function ExpenditureScreen() {
   return (
     <ImageBackground source={BACKGROUND_IMAGE} style={styles.background} resizeMode="cover">
       <View style={styles.overlay}>
-        {/* FEEDBACK #13: KeyboardAvoidingView */}
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.container}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
         >
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.title}>Expenditure</Text>
-            <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.addButton}>
+            <Text style={styles.title} numberOfLines={1}>Expenditure</Text>
+            <TouchableOpacity
+              onPress={() => (activeTab === 'expenditures' ? setModalVisible(true) : setBillModalVisible(true))}
+              style={styles.addButton}
+            >
               <Ionicons name="add" size={24} color="#fff" />
             </TouchableOpacity>
           </View>
 
-          {/* Expenditures List */}
+          {/* FEEDBACK #5: Summary Card */}
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryTitle}>Total Expenditure</Text>
+            <View style={styles.summaryRow}>
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryLabel} numberOfLines={1}>Aadil</Text>
+                <Text style={[styles.summaryValue, styles.noWrap]} numberOfLines={1}>
+                  ₹{aadilTotal.toLocaleString('en-IN')}
+                </Text>
+              </View>
+              <View style={styles.summaryDivider} />
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryLabel} numberOfLines={1}>Imran</Text>
+                <Text style={[styles.summaryValue, styles.noWrap]} numberOfLines={1}>
+                  ₹{imranTotal.toLocaleString('en-IN')}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* FEEDBACK #9: Tab Switcher (Expenditures / Bills) */}
+          <View style={styles.tabContainer}>
+            <TouchableOpacity
+              style={[styles.tab, activeTab === 'expenditures' && styles.activeTab]}
+              onPress={() => setActiveTab('expenditures')}
+            >
+              <Text style={[styles.tabText, activeTab === 'expenditures' && styles.activeTabText]}>
+                Expenditures
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tab, activeTab === 'bills' && styles.activeTab]}
+              onPress={() => setActiveTab('bills')}
+            >
+              <Text style={[styles.tabText, activeTab === 'bills' && styles.activeTabText]}>Bills</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Content */}
           <ScrollView
             ref={scrollViewRef}
             style={styles.content}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-            }
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           >
-            {expenditures.length === 0 ? (
-              <View style={styles.emptyState}>
-                <Ionicons name="cash-outline" size={64} color="#D1D5DB" />
-                <Text style={styles.emptyText}>No expenditures yet</Text>
-                <Text style={styles.emptySubtext}>Tap + to add your first entry</Text>
-              </View>
-            ) : (
-              expenditures.map((exp) => (
-                <View key={exp._id} style={styles.card}>
-                  <View style={styles.cardHeader}>
-                    <View>
-                      <Text style={styles.cardDate}>{exp.date}</Text>
-                      <Text style={styles.cardAmount}>₹{exp.amount.toLocaleString('en-IN')}</Text>
-                      <Text style={styles.cardCategory}>
-                        {exp.category} • {exp.subcategory}
-                      </Text>
-                      {exp.notes && <Text style={styles.cardNotes}>"{exp.notes}"</Text>}
-                      <Text style={styles.cardPaidBy}>Paid by {exp.paid_by}</Text>
-                    </View>
-                    <View style={{ gap: 8 }}>
-                      {/* FEEDBACK #10: Transparent background for edit/delete buttons */}
-                      <TouchableOpacity
-                        onPress={() => handleEdit(exp)}
-                        style={styles.editIconButton}
-                      >
-                        <Ionicons name="create-outline" size={20} color="#3B82F6" />
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => handleDelete(exp._id)}
-                        style={styles.deleteIconButton}
-                      >
-                        <Ionicons name="trash-outline" size={20} color="#EF4444" />
-                      </TouchableOpacity>
+            {activeTab === 'expenditures' ? (
+              // Expenditures List
+              expenditures.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Ionicons name="receipt-outline" size={64} color="#D1D5DB" />
+                  <Text style={styles.emptyText}>No expenditures yet</Text>
+                  <Text style={styles.emptySubtext}>Tap + to add your first entry</Text>
+                </View>
+              ) : (
+                expenditures.map((exp) => (
+                  <View key={exp._id} style={styles.card}>
+                    <View style={styles.cardHeader}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.cardDate} numberOfLines={1}>{exp.date}</Text>
+                        <Text style={[styles.cardAmount, styles.noWrap]} numberOfLines={1}>
+                          ₹{exp.amount.toLocaleString('en-IN')}
+                        </Text>
+                        <Text style={styles.cardCategory} numberOfLines={1}>
+                          {exp.category} • {exp.subcategory}
+                        </Text>
+                        {exp.notes && (
+                          <Text style={styles.cardNotes} numberOfLines={2}>
+                            {exp.notes}
+                          </Text>
+                        )}
+                        <Text style={styles.cardPaidBy} numberOfLines={1}>Paid by {exp.paid_by}</Text>
+                      </View>
+                      {/* FEEDBACK #1: UI consistency - transparent buttons with border */}
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <TouchableOpacity onPress={() => handleEdit(exp)} style={styles.editIconButton}>
+                          <Ionicons name="create-outline" size={18} color="#3B82F6" />
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => handleDelete(exp._id)} style={styles.deleteIconButton}>
+                          <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                        </TouchableOpacity>
+                      </View>
                     </View>
                   </View>
+                ))
+              )
+            ) : (
+              // FEEDBACK #9: Bills List
+              bills.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Ionicons name="document-attach-outline" size={64} color="#D1D5DB" />
+                  <Text style={styles.emptyText}>No bills yet</Text>
+                  <Text style={styles.emptySubtext}>Tap + to upload your first bill</Text>
                 </View>
-              ))
+              ) : (
+                bills.map((bill) => (
+                  <View key={bill._id} style={styles.billCard}>
+                    <Image source={{ uri: bill.image }} style={styles.billImage} resizeMode="cover" />
+                    <View style={styles.billInfo}>
+                      <Text style={styles.billDescription} numberOfLines={1}>
+                        {bill.description}
+                      </Text>
+                      {bill.amount && (
+                        <Text style={[styles.billAmount, styles.noWrap]} numberOfLines={1}>
+                          ₹{bill.amount.toLocaleString('en-IN')}
+                        </Text>
+                      )}
+                      <Text style={styles.billDate} numberOfLines={1}>{bill.date}</Text>
+                      <Text style={styles.billUploader} numberOfLines={1}>By {bill.uploaded_by}</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => handleDeleteBill(bill._id)} style={styles.deleteIconButton}>
+                      <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                    </TouchableOpacity>
+                  </View>
+                ))
+              )
             )}
           </ScrollView>
 
-          {/* Add/Edit Modal */}
-          <Modal
-            visible={modalVisible}
-            animationType="slide"
-            transparent={true}
-            onRequestClose={closeModal}
-          >
-            <KeyboardAvoidingView
-              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-              style={styles.modalOverlay}
-            >
+          {/* Add/Edit Expenditure Modal */}
+          <Modal visible={modalVisible} transparent animationType="slide">
+            <View style={styles.modalOverlay}>
               <View style={styles.modalContent}>
                 <View style={styles.modalHeader}>
-                  <Text style={styles.modalTitle}>
+                  <Text style={styles.modalTitle} numberOfLines={1}>
                     {editMode ? 'Edit Expenditure' : 'Add Expenditure'}
                   </Text>
                   <TouchableOpacity onPress={closeModal}>
@@ -361,31 +573,30 @@ export default function ExpenditureScreen() {
                       style={styles.input}
                       value={amount}
                       onChangeText={setAmount}
-                      placeholder="0"
                       keyboardType="numeric"
+                      placeholder="0"
                     />
                   </View>
 
-                  {/* FEEDBACK #14: Native Date Picker */}
                   <View style={styles.formGroup}>
                     <Text style={styles.label}>Date</Text>
-                    <TouchableOpacity
-                      style={styles.dateButton}
-                      onPress={() => setShowDatePicker(true)}
-                    >
-                      <Text style={styles.dateButtonText}>
-                        {date.toLocaleDateString('en-GB')}
-                      </Text>
+                    <TouchableOpacity onPress={() => setShowDatePicker(true)} style={styles.dateButton}>
                       <Ionicons name="calendar-outline" size={20} color="#6B7280" />
+                      <Text style={styles.dateButtonText}>{date.toLocaleDateString('en-GB')}</Text>
                     </TouchableOpacity>
                     {showDatePicker && (
-                      <DateTimePicker
-                        value={date}
-                        mode="date"
-                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                        onChange={onDateChange}
-                      />
+                      <DateTimePicker value={date} mode="date" display="default" onChange={onDateChange} />
                     )}
+                  </View>
+
+                  <View style={styles.formGroup}>
+                    <Text style={styles.label}>Paid By</Text>
+                    <View style={styles.pickerContainer}>
+                      <Picker selectedValue={paidBy} onValueChange={(value) => setPaidBy(value)} style={styles.picker}>
+                        <Picker.Item label="Aadil" value="Aadil" />
+                        <Picker.Item label="Imran" value="Imran" />
+                      </Picker>
+                    </View>
                   </View>
 
                   <View style={styles.formGroup}>
@@ -425,30 +636,109 @@ export default function ExpenditureScreen() {
                   <View style={styles.formGroup}>
                     <Text style={styles.label}>Notes</Text>
                     <TextInput
-                      style={styles.input}
+                      style={[styles.input, { minHeight: 60 }]}
                       value={notes}
                       onChangeText={setNotes}
-                      placeholder="Optional notes"
+                      placeholder="Optional"
                       multiline
                     />
                   </View>
-
-                  <TouchableOpacity
-                    style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-                    onPress={editMode ? handleUpdateExpenditure : handleAddExpenditure}
-                    disabled={loading}
-                  >
-                    {loading ? (
-                      <ActivityIndicator color="#fff" />
-                    ) : (
-                      <Text style={styles.submitButtonText}>
-                        {editMode ? 'Update Expenditure' : 'Add Expenditure'}
-                      </Text>
-                    )}
-                  </TouchableOpacity>
                 </ScrollView>
+
+                {loading ? (
+                  <ActivityIndicator size="large" color="#10B981" style={{ marginTop: 20 }} />
+                ) : (
+                  <TouchableOpacity
+                    onPress={editMode ? handleUpdateExpenditure : handleAddExpenditure}
+                    style={styles.submitButton}
+                  >
+                    <Text style={styles.submitButtonText}>
+                      {editMode ? 'Update Expenditure' : 'Add Expenditure'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
-            </KeyboardAvoidingView>
+            </View>
+          </Modal>
+
+          {/* FEEDBACK #9: Add Bill Modal */}
+          <Modal visible={billModalVisible} transparent animationType="slide">
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>Upload Bill</Text>
+                  <TouchableOpacity onPress={() => setBillModalVisible(false)}>
+                    <Ionicons name="close" size={24} color="#6B7280" />
+                  </TouchableOpacity>
+                </View>
+
+                <ScrollView>
+                  {/* Image Preview */}
+                  {billImage ? (
+                    <View style={styles.imagePreviewContainer}>
+                      <Image source={{ uri: billImage }} style={styles.imagePreview} resizeMode="contain" />
+                      <TouchableOpacity
+                        onPress={() => setBillImage('')}
+                        style={styles.removeImageButton}
+                      >
+                        <Ionicons name="close-circle" size={32} color="#EF4444" />
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <View style={styles.imagePickerContainer}>
+                      <TouchableOpacity onPress={() => pickImage(false)} style={styles.imagePickerButton}>
+                        <Ionicons name="images-outline" size={32} color="#10B981" />
+                        <Text style={styles.imagePickerText}>Gallery</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => pickImage(true)} style={styles.imagePickerButton}>
+                        <Ionicons name="camera-outline" size={32} color="#10B981" />
+                        <Text style={styles.imagePickerText}>Camera</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
+                  <View style={styles.formGroup}>
+                    <Text style={styles.label}>Description</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={billDescription}
+                      onChangeText={setBillDescription}
+                      placeholder="e.g., Feed purchase"
+                    />
+                  </View>
+
+                  <View style={styles.formGroup}>
+                    <Text style={styles.label}>Amount (Optional)</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={billAmount}
+                      onChangeText={setBillAmount}
+                      keyboardType="numeric"
+                      placeholder="0"
+                    />
+                  </View>
+
+                  <View style={styles.formGroup}>
+                    <Text style={styles.label}>Date</Text>
+                    <TouchableOpacity onPress={() => setShowDatePicker(true)} style={styles.dateButton}>
+                      <Ionicons name="calendar-outline" size={20} color="#6B7280" />
+                      <Text style={styles.dateButtonText}>{date.toLocaleDateString('en-GB')}</Text>
+                    </TouchableOpacity>
+                    {showDatePicker && (
+                      <DateTimePicker value={date} mode="date" display="default" onChange={onDateChange} />
+                    )}
+                  </View>
+                </ScrollView>
+
+                {loading ? (
+                  <ActivityIndicator size="large" color="#10B981" style={{ marginTop: 20 }} />
+                ) : (
+                  <TouchableOpacity onPress={handleUploadBill} style={styles.submitButton}>
+                    <Text style={styles.submitButtonText}>Upload Bill</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
           </Modal>
         </KeyboardAvoidingView>
       </View>
@@ -457,7 +747,6 @@ export default function ExpenditureScreen() {
 }
 
 const styles = StyleSheet.create({
-  // FEEDBACK #3 & #9: Transparent background
   background: {
     flex: 1,
     width: '100%',
@@ -482,7 +771,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E5E7EB',
   },
   title: {
-    fontSize: 24,
+    fontSize: 22, // FEEDBACK #3: Reduced
     fontWeight: 'bold',
     color: '#1F2937',
   },
@@ -494,6 +783,75 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  // FEEDBACK #5: Summary Card
+  summaryCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 12,
+    padding: 16,
+    marginHorizontal: 16,
+    marginTop: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  summaryTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  summaryItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  summaryDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: '#E5E7EB',
+  },
+  summaryLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginBottom: 4,
+  },
+  summaryValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#EF4444',
+  },
+  // FEEDBACK #9: Tab Container
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    marginHorizontal: 16,
+    marginTop: 12,
+    borderRadius: 12,
+    padding: 4,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 10,
+  },
+  activeTab: {
+    backgroundColor: '#10B981',
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  activeTabText: {
+    color: '#fff',
+  },
   content: {
     flex: 1,
     padding: 16,
@@ -501,7 +859,7 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 12,
-    padding: 16,
+    padding: 14, // FEEDBACK #3: Reduced
     marginBottom: 12,
     elevation: 2,
     shadowColor: '#000',
@@ -514,32 +872,32 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   cardDate: {
-    fontSize: 12,
+    fontSize: 11, // FEEDBACK #3
     color: '#6B7280',
     marginBottom: 4,
   },
   cardAmount: {
-    fontSize: 24,
+    fontSize: 20, // FEEDBACK #3: Reduced from 24
     fontWeight: 'bold',
     color: '#EF4444',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   cardCategory: {
-    fontSize: 12,
+    fontSize: 11, // FEEDBACK #3
     color: '#6B7280',
   },
   cardNotes: {
-    fontSize: 12,
+    fontSize: 11, // FEEDBACK #3
     color: '#9CA3AF',
     fontStyle: 'italic',
     marginTop: 4,
   },
   cardPaidBy: {
-    fontSize: 12,
+    fontSize: 11, // FEEDBACK #3
     color: '#6B7280',
     marginTop: 4,
   },
-  // FEEDBACK #10: Transparent edit/delete buttons
+  // FEEDBACK #1: Transparent edit/delete buttons
   editIconButton: {
     padding: 8,
     backgroundColor: 'transparent',
@@ -554,19 +912,103 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#EF4444',
   },
+  // FEEDBACK #9: Bill Card
+  billCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  billImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    backgroundColor: '#F3F4F6',
+    marginRight: 12,
+  },
+  billInfo: {
+    flex: 1,
+  },
+  billDescription: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  billAmount: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#EF4444',
+    marginBottom: 2,
+  },
+  billDate: {
+    fontSize: 11,
+    color: '#6B7280',
+    marginBottom: 2,
+  },
+  billUploader: {
+    fontSize: 10,
+    color: '#9CA3AF',
+  },
+  // FEEDBACK #9: Image Picker
+  imagePickerContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  imagePickerButton: {
+    flex: 1,
+    backgroundColor: '#F0FDF4',
+    borderRadius: 12,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#10B981',
+    borderStyle: 'dashed',
+  },
+  imagePickerText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#10B981',
+    marginTop: 8,
+  },
+  imagePreviewContainer: {
+    position: 'relative',
+    marginBottom: 16,
+  },
+  imagePreview: {
+    width: '100%',
+    height: 200,
+    borderRadius: 12,
+    backgroundColor: '#F3F4F6',
+  },
+  removeImageButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+  },
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingTop: 100,
   },
   emptyText: {
-    fontSize: 18,
+    fontSize: 16, // FEEDBACK #3
     fontWeight: '600',
     color: '#6B7280',
     marginTop: 16,
   },
   emptySubtext: {
-    fontSize: 14,
+    fontSize: 13, // FEEDBACK #3
     color: '#9CA3AF',
     marginTop: 8,
   },
@@ -589,7 +1031,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 18, // FEEDBACK #3
     fontWeight: 'bold',
     color: '#1F2937',
   },
@@ -597,7 +1039,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   label: {
-    fontSize: 14,
+    fontSize: 13, // FEEDBACK #3
     fontWeight: '600',
     color: '#374151',
     marginBottom: 8,
@@ -609,10 +1051,9 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
     paddingVertical: 12,
     paddingHorizontal: 16,
-    fontSize: 16,
+    fontSize: 15, // FEEDBACK #3
     color: '#1F2937',
   },
-  // FEEDBACK #14: Date button
   dateButton: {
     backgroundColor: '#F9FAFB',
     borderRadius: 8,
@@ -625,7 +1066,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   dateButtonText: {
-    fontSize: 16,
+    fontSize: 15, // FEEDBACK #3
     color: '#1F2937',
   },
   pickerContainer: {
@@ -650,7 +1091,11 @@ const styles = StyleSheet.create({
   },
   submitButtonText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 15, // FEEDBACK #3
     fontWeight: '600',
+  },
+  // FEEDBACK #3: Prevent number wrapping
+  noWrap: {
+    flexShrink: 0,
   },
 });
