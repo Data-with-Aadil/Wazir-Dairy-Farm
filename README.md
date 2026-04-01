@@ -1,6 +1,9 @@
 # 🐄 Wazir Dairy Farm App – COMPLETE ENGINEERING PLAYBOOK
 
 ---
+render & swagger:- backend and api testing(/docs)
+expo:- UI(android itself) and apk builder... api.js is used to connect both.
+
 
 # 🧠 0. Journey Summary (Context)
 
