@@ -15,11 +15,10 @@ import {
   ImageBackground,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import DateTimePicker from '@react-native-community/datetimepicker'; // FEEDBACK #14
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useAuth } from '../../context/AuthContext';
 import { useFocusEffect } from 'expo-router';
 
-// FEEDBACK #3 & #9: Add background image
 const BACKGROUND_IMAGE = require('../../assets/images/0vjmy7gj_1000044672.jpg');
 const BACKEND_URL = "https://wazir-dairy-farm.onrender.com";
 
@@ -41,18 +40,15 @@ export default function MilkSalesScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const scrollViewRef = React.useRef<ScrollView>(null);
 
-  // Edit mode states
   const [editMode, setEditMode] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  // Form fields
-  const [date, setDate] = useState(new Date()); // FEEDBACK #14: Changed to Date object
-  const [showDatePicker, setShowDatePicker] = useState(false); // FEEDBACK #14
+  const [date, setDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [volume, setVolume] = useState('');
   const [fatPercentage, setFatPercentage] = useState('');
   const [rate, setRate] = useState('8.4');
 
-  // Scroll to top when tab is focused
   useFocusEffect(
     React.useCallback(() => {
       scrollViewRef.current?.scrollTo({ y: 0, animated: false });
@@ -68,7 +64,7 @@ export default function MilkSalesScreen() {
       const response = await fetch(`${BACKEND_URL}/api/milk-sales`);
       if (response.ok) {
         const data = await response.json();
-        setSales(data.slice(0, 20)); // Last 20 entries
+        setSales(data.slice(0, 20));
       }
     } catch (error) {
       console.error('Error fetching sales:', error);
@@ -81,7 +77,6 @@ export default function MilkSalesScreen() {
     setRefreshing(false);
   };
 
-  // FEEDBACK #14: Date picker handler
   const onDateChange = (event: any, selectedDate?: Date) => {
     setShowDatePicker(Platform.OS === 'ios');
     if (selectedDate) {
@@ -112,7 +107,7 @@ export default function MilkSalesScreen() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          date: date.toISOString().split('T')[0], // FEEDBACK #14: Convert Date to string
+          date: date.toISOString().split('T')[0],
           volume: vol,
           fat_percentage: fat,
           rate: r,
@@ -136,7 +131,7 @@ export default function MilkSalesScreen() {
   const handleEdit = (sale: MilkSale) => {
     setEditMode(true);
     setEditingId(sale._id);
-    setDate(new Date(sale.date)); // FEEDBACK #14: Convert string to Date
+    setDate(new Date(sale.date));
     setVolume(sale.volume.toString());
     setFatPercentage(sale.fat_percentage.toString());
     setRate(sale.rate.toString());
@@ -166,7 +161,7 @@ export default function MilkSalesScreen() {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          date: date.toISOString().split('T')[0], // FEEDBACK #14
+          date: date.toISOString().split('T')[0],
           volume: vol,
           fat_percentage: fat,
           rate: r,
@@ -191,7 +186,6 @@ export default function MilkSalesScreen() {
     }
   };
 
-  // FEEDBACK #12: Delete confirmation already exists
   const handleDelete = async (id: string) => {
     Alert.alert('Delete Entry', 'Are you sure you want to delete this entry?', [
       { text: 'Cancel', style: 'cancel' },
@@ -215,7 +209,7 @@ export default function MilkSalesScreen() {
   };
 
   const resetForm = () => {
-    setDate(new Date()); // FEEDBACK #14
+    setDate(new Date());
     setVolume('');
     setFatPercentage('');
     setRate('8.4');
@@ -238,15 +232,13 @@ export default function MilkSalesScreen() {
   return (
     <ImageBackground source={BACKGROUND_IMAGE} style={styles.background} resizeMode="cover">
       <View style={styles.overlay}>
-        {/* FEEDBACK #13: KeyboardAvoidingView */}
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.container}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
         >
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.title}>Milk Sales</Text>
+            <Text style={styles.title} numberOfLines={1}>Milk Sales</Text>
             <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.addButton}>
               <Ionicons name="add" size={24} color="#fff" />
             </TouchableOpacity>
@@ -256,9 +248,7 @@ export default function MilkSalesScreen() {
           <ScrollView
             ref={scrollViewRef}
             style={styles.content}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-            }
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           >
             {sales.length === 0 ? (
               <View style={styles.emptyState}>
@@ -270,32 +260,34 @@ export default function MilkSalesScreen() {
               sales.map((sale) => (
                 <View key={sale._id} style={styles.card}>
                   <View style={styles.cardHeader}>
-                    <View>
-                      <Text style={styles.cardDate}>{sale.date}</Text>
-                      <Text style={styles.cardAmount}>₹{sale.earnings.toLocaleString('en-IN')}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.cardDate} numberOfLines={1}>{sale.date}</Text>
+                      <Text style={[styles.cardAmount, styles.noWrap]} numberOfLines={1}>
+                        ₹{sale.earnings.toLocaleString('en-IN')}
+                      </Text>
                     </View>
-                    <View style={{ gap: 8 }}>
-                      <TouchableOpacity onPress={() => handleEdit(sale)} style={styles.editButton}>
-                        <Ionicons name="create-outline" size={20} color="#3B82F6" />
+                    {/* FEEDBACK #1: Transparent buttons with border */}
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      <TouchableOpacity onPress={() => handleEdit(sale)} style={styles.editIconButton}>
+                        <Ionicons name="create-outline" size={18} color="#3B82F6" />
                       </TouchableOpacity>
-                      <TouchableOpacity onPress={() => handleDelete(sale._id)}>
-                        <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                      <TouchableOpacity onPress={() => handleDelete(sale._id)} style={styles.deleteIconButton}>
+                        <Ionicons name="trash-outline" size={18} color="#EF4444" />
                       </TouchableOpacity>
                     </View>
                   </View>
-
                   <View style={styles.cardDetails}>
                     <View style={styles.detailItem}>
-                      <Text style={styles.detailLabel}>Volume</Text>
-                      <Text style={styles.detailValue}>{sale.volume}L</Text>
+                      <Text style={styles.detailLabel} numberOfLines={1}>Volume</Text>
+                      <Text style={[styles.detailValue, styles.noWrap]} numberOfLines={1}>{sale.volume}L</Text>
                     </View>
                     <View style={styles.detailItem}>
-                      <Text style={styles.detailLabel}>Fat %</Text>
-                      <Text style={styles.detailValue}>{sale.fat_percentage}%</Text>
+                      <Text style={styles.detailLabel} numberOfLines={1}>Fat %</Text>
+                      <Text style={[styles.detailValue, styles.noWrap]} numberOfLines={1}>{sale.fat_percentage}%</Text>
                     </View>
                     <View style={styles.detailItem}>
-                      <Text style={styles.detailLabel}>Rate</Text>
-                      <Text style={styles.detailValue}>₹{sale.rate}</Text>
+                      <Text style={styles.detailLabel} numberOfLines={1}>Rate</Text>
+                      <Text style={[styles.detailValue, styles.noWrap]} numberOfLines={1}>₹{sale.rate}</Text>
                     </View>
                   </View>
                 </View>
@@ -304,19 +296,11 @@ export default function MilkSalesScreen() {
           </ScrollView>
 
           {/* Add/Edit Modal */}
-          <Modal
-            visible={modalVisible}
-            animationType="slide"
-            transparent={true}
-            onRequestClose={closeModal}
-          >
-            <KeyboardAvoidingView
-              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-              style={styles.modalOverlay}
-            >
+          <Modal visible={modalVisible} transparent animationType="slide">
+            <View style={styles.modalOverlay}>
               <View style={styles.modalContent}>
                 <View style={styles.modalHeader}>
-                  <Text style={styles.modalTitle}>
+                  <Text style={styles.modalTitle} numberOfLines={1}>
                     {editMode ? 'Edit Milk Sale' : 'Add Milk Sale'}
                   </Text>
                   <TouchableOpacity onPress={closeModal}>
@@ -325,25 +309,14 @@ export default function MilkSalesScreen() {
                 </View>
 
                 <ScrollView>
-                  {/* FEEDBACK #14: Native Date Picker */}
                   <View style={styles.formGroup}>
                     <Text style={styles.label}>Date</Text>
-                    <TouchableOpacity
-                      style={styles.dateButton}
-                      onPress={() => setShowDatePicker(true)}
-                    >
-                      <Text style={styles.dateButtonText}>
-                        {date.toLocaleDateString('en-GB')}
-                      </Text>
+                    <TouchableOpacity onPress={() => setShowDatePicker(true)} style={styles.dateButton}>
                       <Ionicons name="calendar-outline" size={20} color="#6B7280" />
+                      <Text style={styles.dateButtonText}>{date.toLocaleDateString('en-GB')}</Text>
                     </TouchableOpacity>
                     {showDatePicker && (
-                      <DateTimePicker
-                        value={date}
-                        mode="date"
-                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                        onChange={onDateChange}
-                      />
+                      <DateTimePicker value={date} mode="date" display="default" onChange={onDateChange} />
                     )}
                   </View>
 
@@ -353,8 +326,8 @@ export default function MilkSalesScreen() {
                       style={styles.input}
                       value={volume}
                       onChangeText={setVolume}
-                      placeholder="0"
                       keyboardType="numeric"
+                      placeholder="0"
                     />
                   </View>
 
@@ -364,8 +337,8 @@ export default function MilkSalesScreen() {
                       style={styles.input}
                       value={fatPercentage}
                       onChangeText={setFatPercentage}
-                      placeholder="0"
                       keyboardType="numeric"
+                      placeholder="0"
                     />
                   </View>
 
@@ -375,34 +348,35 @@ export default function MilkSalesScreen() {
                       style={styles.input}
                       value={rate}
                       onChangeText={setRate}
-                      placeholder="8.4"
                       keyboardType="numeric"
+                      placeholder="8.4"
                     />
                   </View>
 
                   {volume && fatPercentage && rate && (
                     <View style={styles.calculatedBox}>
                       <Text style={styles.calculatedLabel}>Estimated Earnings:</Text>
-                      <Text style={styles.calculatedValue}>₹{calculateEarnings()}</Text>
+                      <Text style={[styles.calculatedValue, styles.noWrap]} numberOfLines={1}>
+                        ₹{calculateEarnings()}
+                      </Text>
                     </View>
                   )}
-
-                  <TouchableOpacity
-                    style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-                    onPress={editMode ? handleUpdateSale : handleAddSale}
-                    disabled={loading}
-                  >
-                    {loading ? (
-                      <ActivityIndicator color="#fff" />
-                    ) : (
-                      <Text style={styles.submitButtonText}>
-                        {editMode ? 'Update Sale' : 'Add Sale'}
-                      </Text>
-                    )}
-                  </TouchableOpacity>
                 </ScrollView>
+
+                {loading ? (
+                  <ActivityIndicator size="large" color="#10B981" style={{ marginTop: 20 }} />
+                ) : (
+                  <TouchableOpacity
+                    onPress={editMode ? handleUpdateSale : handleAddSale}
+                    style={styles.submitButton}
+                  >
+                    <Text style={styles.submitButtonText}>
+                      {editMode ? 'Update Sale' : 'Add Sale'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
-            </KeyboardAvoidingView>
+            </View>
           </Modal>
         </KeyboardAvoidingView>
       </View>
@@ -411,7 +385,6 @@ export default function MilkSalesScreen() {
 }
 
 const styles = StyleSheet.create({
-  // FEEDBACK #3 & #9: Transparent background
   background: {
     flex: 1,
     width: '100%',
@@ -436,7 +409,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E5E7EB',
   },
   title: {
-    fontSize: 24,
+    fontSize: 22, // FEEDBACK #3
     fontWeight: 'bold',
     color: '#1F2937',
   },
@@ -458,20 +431,20 @@ const styles = StyleSheet.create({
     paddingTop: 100,
   },
   emptyText: {
-    fontSize: 18,
+    fontSize: 16, // FEEDBACK #3
     fontWeight: '600',
     color: '#6B7280',
     marginTop: 16,
   },
   emptySubtext: {
-    fontSize: 14,
+    fontSize: 13, // FEEDBACK #3
     color: '#9CA3AF',
     marginTop: 8,
   },
   card: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 12,
-    padding: 16,
+    padding: 14, // FEEDBACK #3
     marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -486,12 +459,12 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   cardDate: {
-    fontSize: 12,
+    fontSize: 11, // FEEDBACK #3
     color: '#6B7280',
     marginBottom: 4,
   },
   cardAmount: {
-    fontSize: 24,
+    fontSize: 20, // FEEDBACK #3
     fontWeight: 'bold',
     color: '#10B981',
   },
@@ -506,17 +479,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   detailLabel: {
-    fontSize: 11,
+    fontSize: 10, // FEEDBACK #3
     color: '#9CA3AF',
     marginBottom: 4,
   },
   detailValue: {
-    fontSize: 14,
+    fontSize: 13, // FEEDBACK #3
     fontWeight: '600',
     color: '#1F2937',
   },
-  editButton: {
-    padding: 4,
+  // FEEDBACK #1: Transparent buttons
+  editIconButton: {
+    padding: 8,
+    backgroundColor: 'transparent',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#3B82F6',
+  },
+  deleteIconButton: {
+    padding: 8,
+    backgroundColor: 'transparent',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#EF4444',
   },
   modalOverlay: {
     flex: 1,
@@ -537,7 +522,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 18, // FEEDBACK #3
     fontWeight: 'bold',
     color: '#1F2937',
   },
@@ -545,7 +530,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   label: {
-    fontSize: 14,
+    fontSize: 13, // FEEDBACK #3
     fontWeight: '600',
     color: '#374151',
     marginBottom: 8,
@@ -557,10 +542,9 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
     paddingVertical: 12,
     paddingHorizontal: 16,
-    fontSize: 16,
+    fontSize: 15, // FEEDBACK #3
     color: '#1F2937',
   },
-  // FEEDBACK #14: Date button
   dateButton: {
     backgroundColor: '#F9FAFB',
     borderRadius: 8,
@@ -573,7 +557,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   dateButtonText: {
-    fontSize: 16,
+    fontSize: 15, // FEEDBACK #3
     color: '#1F2937',
   },
   calculatedBox: {
@@ -586,12 +570,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   calculatedLabel: {
-    fontSize: 14,
+    fontSize: 13, // FEEDBACK #3
     color: '#059669',
     fontWeight: '600',
   },
   calculatedValue: {
-    fontSize: 20,
+    fontSize: 18, // FEEDBACK #3
     fontWeight: 'bold',
     color: '#10B981',
   },
@@ -607,7 +591,11 @@ const styles = StyleSheet.create({
   },
   submitButtonText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 15, // FEEDBACK #3
     fontWeight: '600',
+  },
+  // FEEDBACK #3: Prevent number wrapping
+  noWrap: {
+    flexShrink: 0,
   },
 });
