@@ -28,7 +28,6 @@
       "permissions": [
         "NOTIFICATIONS",
         "POST_NOTIFICATIONS",
-        "RECEIVE_BOOT_COMPLETED",
         "VIBRATE"
       ]
     },
@@ -44,8 +43,7 @@
         {
           "icon": "./assets/images/notification-icon.png",
           "color": "#10B981",
-          "sounds": [],
-          "androidMode": "default"
+          "sounds": ["./assets/sounds/notification.wav"]
         }
       ],
       [
