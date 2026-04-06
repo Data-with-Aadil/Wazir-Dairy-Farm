@@ -19,6 +19,7 @@ import { useAuth } from '../../context/AuthContext';
 import { router, useFocusEffect } from 'expo-router';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import { Picker } from '@react-native-picker/picker'; 
 
 const BACKGROUND_IMAGE = require('../../assets/images/0vjmy7gj_1000044672.jpg');
 const BACKEND_URL = "https://wazir-dairy-farm.onrender.com";
@@ -81,8 +82,14 @@ export default function DashboardScreen() {
   );
 
   useEffect(() => {
-    setupUsers();
-  }, []);
+      if (!isLoading && !user) {
+        router.replace('/');
+      }
+    }, [user, isLoading]);
+
+  // ✅ FIX #2: State for the Month/Year filter
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
   const setupUsers = async () => {
     try {
@@ -93,16 +100,27 @@ export default function DashboardScreen() {
   };
 
   const fetchStats = async () => {
-    try {
-      const response = await fetch(`${BACKEND_URL}/api/stats/dashboard`);
-      if (response.ok) {
+      try {
+        // ✅ Add the query parameters here
+        const response = await fetch(
+          `${BACKEND_URL}/api/stats/dashboard?month=${selectedMonth}&year=${selectedYear}`
+        );
         const data = await response.json();
         setStats(data);
+      } catch (error) {
+        console.error("Fetch error:", error);
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
       }
-    } catch (error) {
-      console.error('Error fetching stats:', error);
-    }
-  };
+    };
+  
+    // ✅ Add this so it refreshes whenever you change the month/year
+    useFocusEffect(
+      React.useCallback(() => {
+        fetchStats();
+      }, [selectedMonth, selectedYear])
+    );
 
   const fetchChartData = async () => {
     try {
@@ -316,6 +334,298 @@ export default function DashboardScreen() {
           ref={scrollViewRef}
           style={styles.container}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        >
+          useFocusEffect(
+    React.useCallback(() => {
+      scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+      fetchStats();
+      fetchChartData();
+      fetchDLS();
+      fetchEvents();
+    }, [])
+  );
+
+  useEffect(() => {
+      if (!isLoading && !user) {
+        router.replace('/');
+      }
+    }, [user, isLoading]);
+
+  // ✅ FIX #2: State for the Month/Year filter
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+
+  const setupUsers = async () => {
+    try {
+      await fetch(`${BACKEND_URL}/api/auth/setup`, { method: 'POST' });
+    } catch (error) {
+      console.error('Setup error:', error);
+    }
+  };
+
+  const fetchStats = async () => {
+      try {
+        // ✅ Add the query parameters here
+        const response = await fetch(
+          `${BACKEND_URL}/api/stats/dashboard?month=${selectedMonth}&year=${selectedYear}`
+        );
+        const data = await response.json();
+        setStats(data);
+      } catch (error) {
+        console.error("Fetch error:", error);
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    };
+  
+    // ✅ Add this so it refreshes whenever you change the month/year
+    useFocusEffect(
+      React.useCallback(() => {
+        scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+        fetchStats(); // Ye ab automatic selectedMonth/Year le lega
+        fetchChartData();
+        fetchDLS();
+        fetchEvents();
+      }, [selectedMonth, selectedYear]) // In dono dependencies ko yahan zaroor likhna
+    );
+
+  const fetchChartData = async () => {
+    try {
+      const [salesRes, expendRes] = await Promise.all([
+        fetch(`${BACKEND_URL}/api/milk-sales`),
+        fetch(`${BACKEND_URL}/api/expenditures`),
+      ]);
+
+      if (salesRes.ok) {
+        const salesData = await salesRes.json();
+        setMilkSales(salesData);
+      }
+
+      if (expendRes.ok) {
+        const expendData = await expendRes.json();
+        setExpenditures(expendData);
+      }
+    } catch (error) {
+      console.error('Error fetching chart data:', error);
+    }
+  };
+
+  const fetchDLS = async () => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/dairy-lock-sales`);
+      if (response.ok) {
+        const data = await response.json();
+        setDlsList(data);
+
+        const now = new Date();
+        const currentMonth = now.getMonth() + 1;
+        const currentYear = now.getFullYear();
+
+        const currentMonthTotal = data
+          .filter((dls: DLS) => dls.month === currentMonth && dls.year === currentYear)
+          .reduce((sum: number, dls: DLS) => sum + dls.amount, 0);
+
+        setCurrentMonthDLS(currentMonthTotal);
+      }
+    } catch (error) {
+      console.error('Error fetching DLS:', error);
+    }
+  };
+
+  const fetchEvents = async () => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/events`);
+      if (response.ok) {
+        const data = await response.json();
+        setEvents(data);
+      }
+    } catch (error) {
+      console.error('Error fetching events:', error);
+    }
+  };
+
+  const calculateReminderDate = (eventDate: string, reminderType: string): string | undefined => {
+    if (reminderType === 'none') return undefined;
+
+    const date = new Date(eventDate);
+    switch (reminderType) {
+      case '15_days':
+        date.setDate(date.getDate() - 15);
+        break;
+      case '1_month':
+        date.setMonth(date.getMonth() - 1);
+        break;
+      case '3_months':
+        date.setMonth(date.getMonth() - 3);
+        break;
+      case '6_months':
+        date.setMonth(date.getMonth() - 6);
+        break;
+      case '1_year':
+        date.setFullYear(date.getFullYear() - 1);
+        break;
+      default:
+        return undefined;
+    }
+    return date.toISOString().split('T')[0];
+  };
+
+  const handleAddEvent = async () => {
+    if (!eventDescription.trim() || !selectedDate) {
+      Alert.alert('Error', 'Please select a date and enter description');
+      return;
+    }
+
+    setAddingEvent(true);
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/events`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          date: selectedDate,
+          description: eventDescription.substring(0, 15),
+          created_by: user?.name,
+          reminder: reminder !== 'none' ? reminder : undefined,
+          reminder_date: calculateReminderDate(selectedDate, reminder),
+        }),
+      });
+
+      if (response.ok) {
+        Alert.alert('Success', 'Event added successfully');
+        setEventModalVisible(false);
+        setEventDescription('');
+        setSelectedDate('');
+        setReminder('none');
+        fetchEvents();
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to add event');
+    } finally {
+      setAddingEvent(false);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([fetchStats(), fetchChartData(), fetchDLS(), fetchEvents()]);
+    setRefreshing(false);
+  };
+
+  // FEEDBACK #7: Fixed logout with router.replace
+  const handleLogout = () => {
+    Alert.alert('Logout', 'Are you sure you want to logout?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Logout',
+        style: 'destructive',
+        onPress: async () => {
+          await logout();
+          router.replace('/');
+        },
+      },
+    ]);
+  };
+
+  const exportToPDF = async () => {
+    try {
+      setExporting(true);
+
+      const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    h1 { color: #10B981; }
+    h2 { color: #374151; margin-top: 20px; }
+    p { color: #6B7280; }
+  </style>
+</head>
+<body>
+  <h1>🐄 Wazir Dairy Farming - Dashboard Report</h1>
+  <p>Generated on ${new Date().toLocaleDateString()}</p>
+  
+  <h2>Total Investment</h2>
+  <p><strong>Total:</strong> ₹${stats?.total_investment.toLocaleString('en-IN') || '0'}</p>
+  <p><strong>Aadil:</strong> ₹${stats?.aadil_investment.toLocaleString('en-IN') || '0'}</p>
+  <p><strong>Imran:</strong> ₹${stats?.imran_investment.toLocaleString('en-IN') || '0'}</p>
+  
+  <h2>Monthly Performance</h2>
+  <p><strong>Earnings:</strong> ₹${stats?.total_earnings.toLocaleString('en-IN') || '0'}</p>
+  <p><strong>Expenditure:</strong> ₹${stats?.total_expenditure.toLocaleString('en-IN') || '0'}</p>
+  <p><strong>Net Profit:</strong> ₹${stats?.net_profit.toLocaleString('en-IN') || '0'}</p>
+  
+  <h2>Dairy Lock Sales</h2>
+  <p><strong>Total:</strong> ₹${stats?.total_dls.toLocaleString('en-IN') || '0'}</p>
+  <p><strong>Current Month:</strong> ₹${currentMonthDLS.toLocaleString('en-IN')}</p>
+</body>
+</html>
+      `;
+
+      const { uri } = await Print.printToFileAsync({ html });
+
+      Alert.alert(
+        'PDF Generated',
+        'Dashboard report has been created. Would you like to share it?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Share',
+            onPress: async () => {
+              if (await Sharing.isAvailableAsync()) {
+                await Sharing.shareAsync(uri);
+              }
+            },
+          },
+        ]
+      );
+    } catch (error) {
+      Alert.alert('Error', 'Failed to generate PDF');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const filteredEvents = events.filter((event: any) => {
+    const eventMonth = event.date.substring(0, 7);
+    return eventMonth === selectedMonth;
+  });
+
+  // FEEDBACK #2: Calculate Net DLS
+  const netDLS = (stats?.total_dls || 0) - (stats?.total_expenditure || 0);
+
+  return (
+    <ImageBackground source={BACKGROUND_IMAGE} style={styles.background} resizeMode="cover">
+      <View style={styles.overlay}>
+        <ScrollView
+          ref={scrollViewRef}
+          style={styles.container}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          <View style={styles.filterCard}>
+             <Text style={styles.filterLabel}>Performance Period:</Text>
+             <View style={styles.pickerRow}>
+                <View style={styles.pickerWrapper}>
+                  <Picker
+                    selectedValue={selectedMonth}
+                    onValueChange={(val) => setSelectedMonth(val)}
+                    style={styles.picker}
+                  >
+                    {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+                      .map((m, i) => <Picker.Item key={m} label={m} value={i + 1} />)}
+                  </Picker>
+                </View>
+                <View style={styles.pickerWrapper}>
+                  <Picker
+                    selectedValue={selectedYear}
+                    onValueChange={(val) => setSelectedYear(val)}
+                    style={styles.picker}
+                  >
+                    {[2024, 2025, 2026].map(y => <Picker.Item key={y} label={y.toString()} value={y} />)}
+                  </Picker>
+                </View>
+             </View>
+          </View>
         >
           {/* Header */}
           <View style={styles.header}>
