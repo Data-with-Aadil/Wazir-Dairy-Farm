@@ -830,8 +830,8 @@ async def startup_event():
     if not scheduler.running:
             scheduler.start()
             
-        logging.info("🚀 Scheduler started successfully in Asia/Kolkata timezone")
-        logging.info("📅 Jobs: Daily Reports (9AM/9PM IST), Reminders (9AM IST)")
+            logging.info("🚀 Scheduler started successfully in Asia/Kolkata timezone")
+            logging.info("📅 Jobs: Daily Reports (9AM/9PM IST), Reminders (9AM IST)")
 
 @app.get("/api/health")
 async def health_check():
