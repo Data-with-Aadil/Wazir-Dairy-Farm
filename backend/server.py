@@ -44,32 +44,48 @@ async def send_push_notification(from_user: str, title: str, body: str, data: Di
         other_user = "Imran" if from_user == "Aadil" else "Aadil"
         user_doc = await db.users.find_one({"name": other_user})
         
-        if not user_doc or not user_doc.get("expo_push_token"):
-            logging.info(f"No push token for {other_user}")
+        if not user_doc or "expo_push_token" not in user_doc:
+            logging.warning(f"⚠️ No push token found for {other_user}")
             return
+
+        token = user_doc["expo_push_token"]
         
-        push_token = user_doc["expo_push_token"]
-        
-        payload = {
-            "to": push_token,
+        # Prepare the standard data payload for app routing
+        # If no specific screen is provided, default to the WRX activity tab
+        payload_data = data or {}
+        if "type" not in payload_data:
+            payload_data["type"] = "activity"
+        if "screen" not in payload_data:
+            payload_data["screen"] = "/(tabs)/wrx"
+
+        message = {
+            "to": token,
+            "sound": "default",
             "title": title,
             "body": body,
-            "data": data or {"screen": "wrx"},
-            "sound": "default",
-            "priority": "high",
-            "channelId": "default",
+            "data": payload_data,
+            "channelId": "default"
         }
-        
-        async with httpx.AsyncClient() as client_http:
-            response = await client_http.post(
-                'https://exp.host/--/api/v2/push/send',
-                json=payload,
-                headers={"Content-Type": "application/json"},
-                timeout=10.0
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://exp.host/--/api/v2/push/send",
+                json=message,
+                headers={
+                    "Accept": "application/json",
+                    "Accept-encoding": "gzip, deflate",
+                    "Content-Type": "application/json",
+                }
             )
-            logging.info(f"Push notification sent to {other_user}: {response.status_code}")
+            
+            result = response.json()
+            if response.status_code == 200:
+                logging.info(f"✅ Push notification sent to {other_user}: {title}")
+            else:
+                logging.error(f"❌ Expo API Error: {result}")
+
     except Exception as e:
-        logging.error(f"Error sending push notification: {e}")
+        logging.error(f"❌ Error sending push notification: {e}")
 
 # FEEDBACK #6: Check for event reminders daily
 async def check_event_reminders():
