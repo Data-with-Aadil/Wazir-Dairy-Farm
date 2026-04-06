@@ -665,29 +665,56 @@ async def react_to_notification(data: ReactionUpdate):
 # ==================== DASHBOARD STATS ====================
 
 @api_router.get("/stats/dashboard")
-async def get_dashboard_stats():
-    investments = await db.investments.find({"deleted": False}).to_list(1000)
-    expenditures = await db.expenditures.find({"deleted": False}).to_list(1000)
-    milk_sales = await db.milk_sales.find({"deleted": False}).to_list(1000)
-    dls = await db.dairy_lock_sales.find({"deleted": False}).to_list(1000)
-    
-    total_investment = sum(inv["amount"] for inv in investments)
-    aadil_investment = sum(inv["amount"] for inv in investments if inv["investor"] == "Aadil")
-    imran_investment = sum(inv["amount"] for inv in investments if inv["investor"] == "Imran")
-    
-    total_expenditure = sum(exp["amount"] for exp in expenditures)
-    total_earnings = sum(sale["earnings"] for sale in milk_sales)
-    total_dls = sum(d["amount"] for d in dls)
-    
-    return {
-        "total_investment": total_investment,
-        "aadil_investment": aadil_investment,
-        "imran_investment": imran_investment,
-        "total_earnings": total_earnings,
-        "total_expenditure": total_expenditure,
-        "net_profit": total_earnings - total_expenditure,
-        "total_dls": total_dls
-    }
+async def get_dashboard_stats(month: Optional[int] = None, year: Optional[int] = None):
+    try:
+        # Default to current month/year if not provided
+        now = datetime.now()
+        target_month = month if month is not None else now.month
+        target_year = year if year is not None else now.year
+
+        # Create date filter for the specific month
+        # Start of month
+        start_date = datetime(target_year, target_month, 1).isoformat()
+        # Start of next month
+        if target_month == 12:
+            end_date = datetime(target_year + 1, 1, 1).isoformat()
+        else:
+            end_date = datetime(target_year, target_month + 1, 1).isoformat()
+
+        date_filter = {"date": {"$gte": start_date, "$lt": end_date}, "deleted": {"$ne": True}}
+
+        # 1. Monthly Expenditures
+        exp_docs = await db.expenditures.find(date_filter).to_list(1000)
+        total_exp = sum(float(d.get("amount", 0)) for d in exp_docs)
+
+        # 2. Monthly Milk Earnings
+        milk_docs = await db.milk_sales.find(date_filter).to_list(1000)
+        total_earn = sum(float(d.get("earnings", 0)) for d in milk_docs)
+
+        # 3. Monthly DLS
+        dls_docs = await db.dls.find(date_filter).to_list(1000)
+        total_dls = sum(float(d.get("amount", 0)) for d in dls_docs)
+
+        # 4. Total Investment (Usually users want to see ALL-TIME investment, 
+        # but we can filter it if needed. Let's keep it all-time for now)
+        inv_docs = await db.investments.find({"deleted": {"$ne": True}}).to_list(1000)
+        total_inv = sum(float(d.get("amount", 0)) for d in inv_docs)
+        aadil_inv = sum(float(d.get("amount", 0)) for d in inv_docs if d.get("investor") == "Aadil")
+        imran_inv = sum(float(d.get("amount", 0)) for d in inv_docs if d.get("investor") == "Imran")
+
+        return {
+            "total_investment": total_inv,
+            "aadil_investment": aadil_inv,
+            "imran_investment": imran_inv,
+            "total_earnings": total_earn,
+            "total_expenditure": total_exp,
+            "total_dls": total_dls,
+            "net_profit": total_earn - total_exp,
+            "month": target_month,
+            "year": target_year
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ==================== CALENDAR EVENT ENDPOINTS ====================
 
