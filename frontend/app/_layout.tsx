@@ -11,7 +11,6 @@ export default function RootLayout() {
   useEffect(() => {
     if (Platform.OS === 'web') return;
 
-    // Setup notification click handler
     const setupNotificationHandler = async () => {
       try {
         const Notifications = await import('expo-notifications');
@@ -19,21 +18,25 @@ export default function RootLayout() {
         // ✅ Handle notification clicks (even when app is closed)
         const subscription = Notifications.addNotificationResponseReceivedListener(response => {
           const data = response.notification.request.content.data;
-          const notificationType = data?.type;
+          
+          console.log('🔔 Notification Clicked with data:', data);
 
-          // ✅ FEEDBACK #1: Route based on notification type
-          if (notificationType === 'event_reminder') {
-            // Event reminders → Dashboard
+          // Route based on the data payload from the backend
+          if (data?.screen) {
+            // Navigate to specific screen provided by backend (e.g., /(tabs)/wrx)
+            router.push(data.screen);
+          } else if (data?.type === 'event_reminder') {
+            // Fallback for older event reminders
             router.push('/(tabs)');
           } else {
-            // All other activity notifications → WRX tab
+            // Default fallback
             router.push('/(tabs)/wrx');
           }
         });
 
         return () => subscription.remove();
       } catch (error) {
-        console.error('Notification setup error:', error);
+        console.error('❌ Notification listener setup error:', error);
       }
     };
 
