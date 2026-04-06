@@ -28,9 +28,6 @@ import * as Sharing from 'expo-sharing';
 const BACKGROUND_IMAGE = require('../../assets/images/0vjmy7gj_1000044672.jpg');
 const BACKEND_URL = "https://wazir-dairy-farm.onrender.com";
 
-const MONTHS = ['All Time', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const YEARS = [2024, 2025, 2026];
-
 const CATEGORIES = {
   Supplements: [
     'Mineral Mixture',
@@ -94,19 +91,6 @@ export default function ExpenditureScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const scrollViewRef = React.useRef<ScrollView>(null);
 
-  // Filters State
-  const [selectedMonth, setSelectedMonth] = useState(0); // 0 = All Time
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-
-  // Form State
-  const [amount, setAmount] = useState('');
-  const [category, setCategory] = useState('Feed');
-  const [subCategory, setSubCategory] = useState('Others');
-  const [spentBy, setSpentBy] = useState(user?.name || 'Aadil');
-  const [date, setDate] = useState(new Date());
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [notes, setNotes] = useState('');
-
   // Expenditure form states
   const [editMode, setEditMode] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -162,30 +146,6 @@ export default function ExpenditureScreen() {
       console.error('Error fetching expenditures:', error);
     }
   };
-
-  // ✅ Calculation Logic for Aadil & Imran
-  const stats = useMemo(() => {
-    const filtered = expenditures.filter(exp => {
-      if (selectedMonth === 0) return true;
-      const expDate = new Date(exp.date);
-      return (expDate.getMonth() + 1 === selectedMonth) && (expDate.getFullYear() === selectedYear);
-    });
-
-    const aadilTotal = filtered
-      .filter(e => e.spent_by === 'Aadil')
-      .reduce((sum, e) => sum + Number(e.amount), 0);
-    
-    const imranTotal = filtered
-      .filter(e => e.spent_by === 'Imran')
-      .reduce((sum, e) => sum + Number(e.amount), 0);
-
-    return { 
-      aadilTotal, 
-      imranTotal, 
-      grandTotal: aadilTotal + imranTotal,
-      list: filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    };
-  }, [expenditures, selectedMonth, selectedYear]);
 
   const fetchBills = async () => {
     try {
@@ -542,172 +502,6 @@ export default function ExpenditureScreen() {
     resetBillForm();
   };
 
-  return (
-      <ImageBackground source={BACKGROUND_IMAGE} style={styles.container}>
-        <View style={styles.overlay}>
-          <View style={styles.header}>
-            <Text style={styles.headerTitle}>Expenditure</Text>
-            <TouchableOpacity 
-              style={styles.addButton} 
-              onPress={() => setModalVisible(true)}
-            >
-              <Ionicons name="add" size={24} color="#fff" />
-            </TouchableOpacity>
-          </View>
-  
-          {/* ✅ FIX: Filters UI */}
-          <View style={styles.filterSection}>
-            <View style={styles.pickerContainer}>
-              <Picker
-                selectedValue={selectedMonth}
-                onValueChange={(val) => setSelectedMonth(val)}
-                style={styles.picker}
-              >
-                {MONTHS.map((m, i) => <Picker.Item key={m} label={m} value={i} />)}
-              </Picker>
-            </View>
-            <View style={styles.pickerContainer}>
-              <Picker
-                selectedValue={selectedYear}
-                onValueChange={(val) => setSelectedYear(val)}
-                style={styles.picker}
-              >
-                {YEARS.map(y => <Picker.Item key={y} label={y.toString()} value={y} />)}
-              </Picker>
-            </View>
-          </View>
-  
-          {/* ✅ FIX: Summary Card (Aadil vs Imran) */}
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryLabel}>
-              {selectedMonth === 0 ? "Total Expenditure (All Time)" : `Total Exp. (${MONTHS[selectedMonth]})`}
-            </Text>
-            <Text style={styles.grandTotal}>₹{stats.grandTotal.toLocaleString()}</Text>
-            <View style={styles.splitRow}>
-              <View>
-                <Text style={styles.splitLabel}>Aadil</Text>
-                <Text style={styles.splitValue}>₹{stats.aadilTotal.toLocaleString()}</Text>
-              </View>
-              <View style={styles.divider} />
-              <View>
-                <Text style={styles.splitLabel}>Imran</Text>
-                <Text style={styles.splitValue}>₹{stats.imranTotal.toLocaleString()}</Text>
-              </View>
-            </View>
-          </View>
-  
-          <ScrollView 
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={fetchExpenditures} />}
-            contentContainerStyle={{ paddingBottom: 100 }}
-          >
-            {stats.list.map((item) => (
-              <View key={item._id} style={styles.itemCard}>
-                <View style={styles.itemMain}>
-                  <View style={styles.iconBox}>
-                    <Ionicons name="cart-outline" size={20} color="#10B981" />
-                  </View>
-                  <View style={styles.itemDetails}>
-                    {/* ✅ FIX: Text wrapping to avoid cutting off */}
-                    <Text style={styles.categoryText} flexWrap="wrap">{item.category} - {item.sub_category}</Text>
-                    <Text style={styles.dateText}>{new Date(item.date).toLocaleDateString()} • By {item.spent_by}</Text>
-                  </View>
-                  <Text style={styles.amountText}>₹{item.amount}</Text>
-                </View>
-              </View>
-            ))}
-          </ScrollView>
-        </View>
-  
-        {/* ✅ FIX: Modal with KeyboardAvoidingView */}
-        <Modal visible={modalVisible} animationType="slide" transparent>
-          <KeyboardAvoidingView 
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={styles.modalOverlay}
-          >
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Add Expenditure</Text>
-                <TouchableOpacity onPress={() => setModalVisible(false)}>
-                  <Ionicons name="close" size={24} color="#6B7280" />
-                </TouchableOpacity>
-              </View>
-  
-              <ScrollView showsVerticalScrollIndicator={false}>
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Amount</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Enter amount"
-                    keyboardType="numeric"
-                    value={amount}
-                    onChangeText={setAmount}
-                  />
-                </View>
-  
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Spent By</Text>
-                  <View style={styles.pickerContainer}>
-                    <Picker selectedValue={spentBy} onValueChange={setSpentBy}>
-                      <Picker.Item label="Aadil" value="Aadil" />
-                      <Picker.Item label="Imran" value="Imran" />
-                    </Picker>
-                  </View>
-                </View>
-  
-                {/* ... Other Form Fields (Date, Category etc) ... */}
-  
-                <TouchableOpacity style={styles.submitButton} onPress={() => {/* logic */}}>
-                  <Text style={styles.submitButtonText}>Save Expenditure</Text>
-                </TouchableOpacity>
-              </ScrollView>
-            </View>
-          </KeyboardAvoidingView>
-        </Modal>
-      </ImageBackground>
-    );
-  }
-  
-  const styles = StyleSheet.create({
-    container: { flex: 1 },
-    overlay: { flex: 1, backgroundColor: 'rgba(255,255,255,0.9)', padding: 20, paddingTop: 50 },
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-    headerTitle: { fontSize: 24, fontWeight: 'bold', color: '#1F2937' },
-    addButton: { backgroundColor: '#10B981', padding: 10, borderRadius: 12 },
-    
-    // Filter Styles
-    filterSection: { flexDirection: 'row', gap: 10, marginBottom: 15 },
-    pickerContainer: { flex: 1, backgroundColor: '#fff', borderRadius: 10, height: 45, justifyContent: 'center', borderWidth: 1, borderColor: '#E5E7EB' },
-    picker: { height: 45 },
-  
-    // Summary Card Styles
-    summaryCard: { backgroundColor: '#1F2937', borderRadius: 15, padding: 20, marginBottom: 20 },
-    summaryLabel: { color: '#9CA3AF', fontSize: 12, marginBottom: 5 },
-    grandTotal: { color: '#fff', fontSize: 28, fontWeight: 'bold', marginBottom: 15 },
-    splitRow: { flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: '#374151', paddingTop: 15 },
-    splitLabel: { color: '#9CA3AF', fontSize: 11 },
-    splitValue: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-    divider: { width: 1, backgroundColor: '#374151', height: '100%' },
-  
-    // List Item Styles
-    itemCard: { backgroundColor: '#fff', borderRadius: 12, padding: 15, marginBottom: 10, elevation: 2 },
-    itemMain: { flexDirection: 'row', alignItems: 'center' },
-    iconBox: { width: 40, height: 40, backgroundColor: '#F0FDF4', borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-    itemDetails: { flex: 1 }, // ✅ flex: 1 helps in wrapping text
-    categoryText: { fontSize: 15, fontWeight: 'bold', color: '#374151', flexWrap: 'wrap' },
-    dateText: { fontSize: 12, color: '#6B7280', marginTop: 2 },
-    amountText: { fontSize: 16, fontWeight: 'bold', color: '#EF4444' },
-  
-    // Modal Styles
-    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-    modalContent: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: '90%' },
-    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
-    modalTitle: { fontSize: 20, fontWeight: 'bold' },
-    formGroup: { marginBottom: 15 },
-    label: { fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8 },
-    input: { backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 8, padding: 12 },
-    submitButton: { backgroundColor: '#10B981', padding: 15, borderRadius: 10, alignItems: 'center', marginTop: 10 },
-    submitButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 16 }
-  });
   return (
     <ImageBackground source={BACKGROUND_IMAGE} style={styles.background} resizeMode="cover">
       <View style={styles.overlay}>
