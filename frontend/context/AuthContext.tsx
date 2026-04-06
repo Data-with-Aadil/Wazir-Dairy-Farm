@@ -5,7 +5,8 @@ import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
-const BACKEND_URL = "https://wazir-dairy-farm.onrender.com";
+// ✅ Updated to correct backend URL
+const BACKEND_URL = "https://wazir-dairy-farm-1.onrender.com";
 
 interface User {
   name: string;
@@ -136,12 +137,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       console.log('✅ Notification permission granted');
 
-      const projectId = Constants.expoConfig?.extra?.eas?.projectId ||
-                       Constants.easConfig?.projectId;
-
-      if (!projectId) {
-        console.warn('⚠️ No projectId found');
-      }
+      // ✅ Using provided Project ID to ensure token generation
+      const projectId = "1b758208-fbd5-44ae-a860-d75e4cce3809";
 
       const token = await Notifications.getExpoPushTokenAsync({
         projectId: projectId
@@ -156,7 +153,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const sendTokenToBackend = async (userName: string, token: string) => {
     try {
-      console.log(`📤 Sending token to backend for ${userName}...`);
+      console.log(`📤 Sending token to backend for ${userName}: ${token}`);
       const response = await fetch(`${BACKEND_URL}/api/auth/update-push-token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -180,7 +177,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const userData = await AsyncStorage.getItem('user');
       if (userData) {
-        setUser(JSON.parse(userData));
+        const parsedUser = JSON.parse(userData);
+        setUser(parsedUser);
       }
     } catch (error) {
       console.error('Load user error:', error);
@@ -201,6 +199,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const data = await response.json();
         await AsyncStorage.setItem('user', JSON.stringify(data.user));
         setUser(data.user);
+        
+        // If we already have a token, send it immediately after login
+        if (expoPushToken) {
+          sendTokenToBackend(data.user.name, expoPushToken);
+        }
+        
         return true;
       }
       return false;
