@@ -68,7 +68,7 @@ export default function DashboardScreen() {
   const [eventDescription, setEventDescription] = useState('');
   const [reminder, setReminder] = useState('none');
   const [addingEvent, setAddingEvent] = useState(false);
-  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().split('T')[0].substring(0, 7));
+  // const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().split('T')[0].substring(0, 7));
   const scrollViewRef = React.useRef<ScrollView>(null);
 
   useEffect(() => {
