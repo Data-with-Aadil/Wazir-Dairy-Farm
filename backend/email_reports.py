@@ -6,57 +6,67 @@ import httpx
 from datetime import datetime, timedelta
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
+import pytz
 
 # Resend Configuration
 RESEND_API_KEY = "re_XLQhuZYC_NCb1czT5b5mwSZArxCEgzdBw"
-RECIPIENT_EMAILS = ["aadi208888@gmail.com", "aadilmansoori111@gmail.com","mansuri.imran777@gmail.com"]
+RECIPIENT_EMAILS = ["aadi208888@gmail.com", "aadilmansoori111@gmail.com", "mansuri.imran777@gmail.com"]
 SENDER_EMAIL = "onboarding@resend.dev"
 
-# MongoDB connection (reuse from server.py environment)
-MONGO_URL = os.getenv("MONGO_URL", "mongodb://localhost:27017")
-client = AsyncIOMotorClient(MONGO_URL)
-db = client["wazir_dairy"]
+# Timezone Configuration
+IST = pytz.timezone('Asia/Kolkata')
 
+# MongoDB connection (Matches server.py logic)
+MONGO_URL = os.getenv("MONGO_URL", "mongodb://localhost:27017")
+DB_NAME = os.getenv("DB_NAME", "wazir_dairy")
+client = AsyncIOMotorClient(MONGO_URL)
+db = client[DB_NAME]
 
 async def fetch_dashboard_stats():
-    """Fetch aggregated dashboard statistics"""
+    """Fetch aggregated dashboard statistics using IST timezone logic"""
     try:
-        # Get today's date range
-        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-        tomorrow = today + timedelta(days=1)
+        # Get today's date range in IST
+        now_ist = datetime.now(IST)
+        today_start = now_ist.replace(hour=0, minute=0, second=0, microsecond=0)
+        tomorrow_start = today_start + timedelta(days=1)
+
+        # ISO strings for MongoDB filtering
+        start_str = today_start.isoformat()
+        end_str = tomorrow_start.isoformat()
 
         # Fetch collections
         expenditures = await db.expenditures.find({
-            "date": {"$gte": today.isoformat(), "$lt": tomorrow.isoformat()},
+            "date": {"$gte": start_str, "$lt": end_str},
             "deleted": {"$ne": True}
         }).to_list(1000)
 
         investments = await db.investments.find({
-            "date": {"$gte": today.isoformat(), "$lt": tomorrow.isoformat()},
+            "date": {"$gte": start_str, "$lt": end_str},
             "deleted": {"$ne": True}
         }).to_list(1000)
 
+        # Note: Milk sales uses 'earnings' field for the amount
         milk_sales = await db.milk_sales.find({
-            "date": {"$gte": today.isoformat(), "$lt": tomorrow.isoformat()},
+            "date": {"$gte": start_str, "$lt": end_str},
             "deleted": {"$ne": True}
         }).to_list(1000)
 
         dls_records = await db.dls.find({
-            "date": {"$gte": today.isoformat(), "$lt": tomorrow.isoformat()},
+            "date": {"$gte": start_str, "$lt": end_str},
             "deleted": {"$ne": True}
         }).to_list(1000)
 
         # Calculate totals
         total_expenditure = sum(float(e.get("amount", 0)) for e in expenditures)
         total_investment = sum(float(i.get("amount", 0)) for i in investments)
-        total_milk_sales = sum(float(m.get("amount", 0)) for m in milk_sales)
+        total_milk_sales = sum(float(m.get("earnings", 0)) for m in milk_sales)
         total_dls = sum(float(d.get("amount", 0)) for d in dls_records)
 
         # Net DLS calculation
         net_dls = total_dls - total_expenditure
 
         return {
-            "date": today.strftime("%d %B %Y"),
+            "date": today_start.strftime("%d %B %Y"),
             "total_dls": total_dls,
             "total_expenditure": total_expenditure,
             "total_investment": total_investment,
@@ -72,13 +82,10 @@ async def fetch_dashboard_stats():
         print(f"Error fetching dashboard stats: {e}")
         return None
 
-
 def generate_html_report(stats):
     """Generate HTML email template with dashboard stats"""
     if not stats:
         return "<p>Unable to fetch dashboard statistics.</p>"
-
-    net_dls_color = "#10B981" if stats["net_dls"] >= 0 else "#EF4444"
 
     html = f"""
     <!DOCTYPE html>
@@ -140,11 +147,11 @@ def generate_html_report(stats):
     """
     return html
 
-
 async def send_daily_report():
     """Main function to send daily email report via Resend"""
     try:
-        print(f"[{datetime.now()}] Starting daily email report...")
+        now_ist = datetime.now(IST)
+        print(f"[{now_ist}] Starting daily email report process...")
 
         # Fetch stats
         stats = await fetch_dashboard_stats()
@@ -180,27 +187,26 @@ async def send_daily_report():
     except Exception as e:
         print(f"❌ Error sending daily report: {e}")
 
-
 def setup_email_scheduler(scheduler):
-    """Setup cron jobs for 9 AM and 9 PM daily reports"""
+    """Setup cron jobs for 9 AM and 9 PM daily reports in IST"""
     from apscheduler.triggers.cron import CronTrigger
 
     # 9 AM daily report
     scheduler.add_job(
         send_daily_report,
-        CronTrigger(hour=9, minute=0),
+        CronTrigger(hour=9, minute=0, timezone=IST),
         id="daily_report_9am",
-        name="Daily Email Report (9 AM)",
+        name="Daily Email Report (9 AM IST)",
         replace_existing=True
     )
 
     # 9 PM daily report
     scheduler.add_job(
         send_daily_report,
-        CronTrigger(hour=21, minute=0),
+        CronTrigger(hour=21, minute=0, timezone=IST),
         id="daily_report_9pm",
-        name="Daily Email Report (9 PM)",
+        name="Daily Email Report (9 PM IST)",
         replace_existing=True
     )
 
-    print("✅ Email scheduler configured: Reports at 9 AM and 9 PM daily")
+    print("✅ Email scheduler configured: Reports at 9 AM and 9 PM IST daily")
