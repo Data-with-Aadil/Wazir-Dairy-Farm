@@ -237,8 +237,18 @@ export default function DashboardScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([fetchStats(), fetchChartData(), fetchDLS(), fetchEvents()]);
-    setRefreshing(false);
+    try {
+      await Promise.all([
+        fetchStats(),
+        fetchChartData(),
+        fetchDLS(),
+        fetchEvents()
+      ]);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   // FEEDBACK #7: Fixed logout with router.replace
@@ -505,8 +515,18 @@ export default function DashboardScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([fetchStats(), fetchChartData(), fetchDLS(), fetchEvents()]);
-    setRefreshing(false);
+    try {
+      await Promise.all([
+        fetchStats(),
+        fetchChartData(),
+        fetchDLS(),
+        fetchEvents()
+      ]);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   // FEEDBACK #7: Fixed logout with router.replace
