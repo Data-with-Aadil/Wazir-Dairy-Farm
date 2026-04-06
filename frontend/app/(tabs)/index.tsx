@@ -71,16 +71,6 @@ export default function DashboardScreen() {
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().split('T')[0].substring(0, 7));
   const scrollViewRef = React.useRef<ScrollView>(null);
 
-  useFocusEffect(
-    React.useCallback(() => {
-      scrollViewRef.current?.scrollTo({ y: 0, animated: false });
-      fetchStats();
-      fetchChartData();
-      fetchDLS();
-      fetchEvents();
-    }, [])
-  );
-
   useEffect(() => {
       if (!isLoading && !user) {
         router.replace('/');
@@ -118,8 +108,15 @@ export default function DashboardScreen() {
     // ✅ Add this so it refreshes whenever you change the month/year
     useFocusEffect(
       React.useCallback(() => {
+        // Screen focus par scroll top karein
+        scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+        
+        // Saara data fetch karein
         fetchStats();
-      }, [selectedMonth, selectedYear])
+        fetchChartData();
+        fetchDLS();
+        fetchEvents();
+      }, [selectedMonth, selectedYear]) // In dono ke change hote hi data refresh hoga
     );
 
   const fetchChartData = async () => {
@@ -275,7 +272,7 @@ export default function DashboardScreen() {
   </style>
 </head>
 <body>
-  <h1>🐄 Wazir Dairy Farming - Dashboard Report</h1>
+  <h1>🐄 Wazir Dairy Farming - Report (${selectedMonth}/${selectedYear})</h1>
   <p>Generated on ${new Date().toLocaleDateString()}</p>
   
   <h2>Total Investment</h2>
@@ -543,7 +540,7 @@ export default function DashboardScreen() {
   </style>
 </head>
 <body>
-  <h1>🐄 Wazir Dairy Farming - Dashboard Report</h1>
+  <h1>🐄 Wazir Dairy Farming - Report (${selectedMonth}/${selectedYear})</h1>
   <p>Generated on ${new Date().toLocaleDateString()}</p>
   
   <h2>Total Investment</h2>
@@ -601,7 +598,7 @@ export default function DashboardScreen() {
         <ScrollView
           ref={scrollViewRef}
           style={styles.container}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
           <View style={styles.filterCard}>
              <Text style={styles.filterLabel}>Performance Period:</Text>
              <View style={styles.pickerRow}>
