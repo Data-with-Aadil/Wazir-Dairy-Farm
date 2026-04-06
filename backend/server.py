@@ -12,6 +12,7 @@ from bson import ObjectId
 import httpx
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from pytz import timezone
 
 # 🆕 FEEDBACK #16: Import email reports module
 from email_reports import setup_email_scheduler
@@ -29,7 +30,8 @@ app = FastAPI()
 api_router = APIRouter(prefix="/api")
 
 # FEEDBACK #6: Initialize scheduler for reminder notifications
-scheduler = AsyncIOScheduler()
+IST = timezone('Asia/Kolkata')
+scheduler = AsyncIOScheduler(timezone=IST)
 
 # Helper to convert ObjectId to string
 def serialize_doc(doc):
@@ -89,9 +91,9 @@ async def send_push_notification(from_user: str, title: str, body: str, data: Di
 
 # FEEDBACK #6: Check for event reminders daily
 async def check_event_reminders():
-    """Background task to check for event reminders and send notifications"""
     try:
-        today = datetime.now().date().isoformat()
+        IST = timezone('Asia/Kolkata')
+        today = datetime.now(IST).date().isoformat()
         logging.info(f"Checking event reminders for {today}")
         
         events = await db.events.find({
@@ -100,40 +102,33 @@ async def check_event_reminders():
         }).to_list(1000)
         
         for event in events:
-            title = "Event Reminder"
             body = f"Upcoming event: {event['description']} on {event['date']}"
-            data = {
-                "screen": "wrx",
+            
+            # Save to notification history
+            notif_data = {
                 "type": "event_reminder",
-                "event_id": str(event["_id"])
+                "data": {"event_id": str(event["_id"]), "description": event['description']},
+                "message": body,
+                "created_at": datetime.utcnow()
             }
+            await db.notifications.insert_one(notif_data)
             
-            notif = Notification(
-                type="event_reminder",
-                data={"event": event},
-                message=body
-            )
-            await db.notifications.insert_one(notif.dict())
-            
+            # Send Push to both partners
             for user_name in ["Aadil", "Imran"]:
                 user_doc = await db.users.find_one({"name": user_name})
                 if user_doc and user_doc.get("expo_push_token"):
+                    # Use a single httpx client session for better performance if possible
                     async with httpx.AsyncClient() as client_http:
                         await client_http.post(
                             'https://exp.host/--/api/v2/push/send',
                             json={
                                 "to": user_doc["expo_push_token"],
-                                "title": title,
+                                "title": "Event Reminder",
                                 "body": body,
-                                "data": data,
-                                "sound": "default",
-                                "priority": "high",
-                            },
-                            headers={"Content-Type": "application/json"}
+                                "data": {"screen": "/(tabs)/", "type": "event_reminder"},
+                                "sound": "default"
+                            }
                         )
-            
-            logging.info(f"Reminder sent for event: {event['description']}")
-        
     except Exception as e:
         logging.error(f"Error checking reminders: {e}")
 
@@ -805,8 +800,16 @@ async def startup_event():
     # 🆕 FEEDBACK #16: Setup email reports (9 AM and 9 PM)
     setup_email_scheduler(scheduler)
     
-    scheduler.start()
-    logging.info("✅ Scheduler started: Event reminders (9 AM) + Email reports (9 AM & 9 PM)")
+    if not scheduler.running:
+            scheduler.start()
+            
+        logging.info("🚀 Scheduler started successfully in Asia/Kolkata timezone")
+        logging.info("📅 Jobs: Daily Reports (9AM/9PM IST), Reminders (9AM IST)")
+
+@app.get("/api/health")
+async def health_check():
+    # Helpful for keeping the Render instance awake
+    return {"status": "healthy", "timezone": "Asia/Kolkata", "time": datetime.now(IST).isoformat()}
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
