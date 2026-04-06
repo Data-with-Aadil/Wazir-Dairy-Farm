@@ -139,3 +139,4 @@ motor
 python-dotenv
 apscheduler
 httpx
+pytz==2024.1
