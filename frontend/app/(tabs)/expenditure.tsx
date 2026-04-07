@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -109,9 +109,36 @@ export default function ExpenditureScreen() {
   const [billDate, setBillDate] = useState(new Date());
   const [showBillDatePicker, setShowBillDatePicker] = useState(false);
 
-  // Summary stats
-  const [aadilTotal, setAadilTotal] = useState(0);
-  const [imranTotal, setImranTotal] = useState(0);
+  // --- ✅ CHANGE #1: Filter States & Summary Logic ---
+  const [selectedMonth, setSelectedMonth] = useState(0); // 0 = All Time
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+
+  const MONTHS = ['All Time', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const YEARS = [2024, 2025, 2026];
+
+  // ✅ Aadil & Imran Split Logic
+  const stats = useMemo(() => {
+    const filtered = expenditures.filter(exp => {
+      if (selectedMonth === 0) return true;
+      const expDate = new Date(exp.date);
+      return (expDate.getMonth() + 1 === selectedMonth) && (expDate.getFullYear() === selectedYear);
+    });
+
+    const aadilTotal = filtered
+      .filter(e => e.paid_by === 'Aadil')
+      .reduce((sum, e) => sum + Number(e.amount), 0);
+    
+    const imranTotal = filtered
+      .filter(e => e.paid_by === 'Imran')
+      .reduce((sum, e) => sum + Number(e.amount), 0);
+
+    return { 
+      aadilTotal, 
+      imranTotal, 
+      grandTotal: aadilTotal + imranTotal,
+      list: filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    };
+  }, [expenditures, selectedMonth, selectedYear]);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -123,17 +150,6 @@ export default function ExpenditureScreen() {
     fetchExpenditures();
     fetchBills();
   }, []);
-
-  useEffect(() => {
-    const aadil = expenditures
-      .filter((e) => e.paid_by === 'Aadil')
-      .reduce((sum, e) => sum + e.amount, 0);
-    const imran = expenditures
-      .filter((e) => e.paid_by === 'Imran')
-      .reduce((sum, e) => sum + e.amount, 0);
-    setAadilTotal(aadil);
-    setImranTotal(imran);
-  }, [expenditures]);
 
   const fetchExpenditures = async () => {
     try {
@@ -524,22 +540,6 @@ export default function ExpenditureScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Summary Card */}
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryTitle}>Total Expenditure</Text>
-            <View style={styles.summaryRow}>
-              <View style={styles.summaryItem}>
-                <Text style={styles.summaryLabel}>Aadil</Text>
-                <Text style={styles.summaryValue}>₹{aadilTotal.toLocaleString('en-IN')}</Text>
-              </View>
-              <View style={styles.summaryDivider} />
-              <View style={styles.summaryItem}>
-                <Text style={styles.summaryLabel}>Imran</Text>
-                <Text style={styles.summaryValue}>₹{imranTotal.toLocaleString('en-IN')}</Text>
-              </View>
-            </View>
-          </View>
-
           {/* Tab Switcher */}
           <View style={styles.tabContainer}>
             <TouchableOpacity
@@ -577,44 +577,78 @@ export default function ExpenditureScreen() {
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           >
             {activeTab === 'expenditures' ? (
-              // Expenditures List
-              expenditures.length === 0 ? (
-                <View style={styles.emptyState}>
-                  <Ionicons name="receipt-outline" size={64} color="#D1D5DB" />
-                  <Text style={styles.emptyText}>No expenditures yet</Text>
-                  <Text style={styles.emptySubtext}>Tap + to add your first entry</Text>
+              <>
+                {/* ✅ CHANGE #2: Filter Row */}
+                <View style={{ flexDirection: 'row', gap: 10, marginBottom: 15 }}>
+                  <View style={styles.filterPickerContainer}>
+                    <Picker selectedValue={selectedMonth} onValueChange={setSelectedMonth}>
+                      {MONTHS.map((m, i) => <Picker.Item key={m} label={m} value={i} />)}
+                    </Picker>
+                  </View>
+                  <View style={styles.filterPickerContainer}>
+                    <Picker selectedValue={selectedYear} onValueChange={setSelectedYear}>
+                      {YEARS.map(y => <Picker.Item key={y} label={y.toString()} value={y} />)}
+                    </Picker>
+                  </View>
                 </View>
-              ) : (
-                expenditures.map((exp) => (
-                  <View key={exp._id} style={styles.card}>
-                    <View style={styles.cardHeader}>
-                      <View>
-                        <Text style={styles.cardDate}>{exp.date}</Text>
-                        <Text style={styles.cardAmount}>₹{exp.amount.toLocaleString('en-IN')}</Text>
-                      </View>
-                      <View>
-                        <Text style={styles.cardCategory}>
-                          {exp.category} • {exp.subcategory}
-                        </Text>
-                        {exp.notes && (
-                          <Text style={styles.cardNotes} numberOfLines={1}>
-                            {exp.notes}
-                          </Text>
-                        )}
-                        <Text style={styles.cardPaidBy}>Paid by {exp.paid_by}</Text>
-                      </View>
+
+                {/* ✅ CHANGE #2: Summary Card (Aadil vs Imran) */}
+                <View style={styles.summaryCard}>
+                  <Text style={styles.summaryLabel}>Total Expenditure</Text>
+                  <Text style={styles.grandTotal}>₹{stats.grandTotal.toLocaleString('en-IN')}</Text>
+                  <View style={styles.splitRow}>
+                    <View>
+                      <Text style={styles.splitLabel}>Aadil</Text>
+                      <Text style={styles.splitValue}>₹{stats.aadilTotal.toLocaleString('en-IN')}</Text>
                     </View>
-                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
-                      <TouchableOpacity onPress={() => handleEdit(exp)} style={styles.editIconButton}>
-                        <Ionicons name="pencil" size={16} color="#3B82F6" />
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={() => handleDelete(exp._id)} style={styles.deleteIconButton}>
-                        <Ionicons name="trash" size={16} color="#EF4444" />
-                      </TouchableOpacity>
+                    <View style={styles.splitDivider} />
+                    <View>
+                      <Text style={styles.splitLabel}>Imran</Text>
+                      <Text style={styles.splitValue}>₹{stats.imranTotal.toLocaleString('en-IN')}</Text>
                     </View>
                   </View>
-                ))
-              )
+                </View>
+
+                {/* ✅ CHANGE #2: Use stats.list.map instead of expenditures.map */}
+                {stats.list.length === 0 ? (
+                  <View style={styles.emptyState}>
+                    <Ionicons name="receipt-outline" size={64} color="#D1D5DB" />
+                    <Text style={styles.emptyText}>No expenditures yet</Text>
+                    <Text style={styles.emptySubtext}>Tap + to add your first entry</Text>
+                  </View>
+                ) : (
+                  stats.list.map((exp) => (
+                    <View key={exp._id} style={styles.card}>
+                      <View style={styles.cardHeader}>
+                        <View>
+                          <Text style={styles.cardDate}>{exp.date}</Text>
+                          <Text style={styles.cardAmount}>₹{exp.amount.toLocaleString('en-IN')}</Text>
+                        </View>
+                        {/* ✅ CHANGE #3: flex: 1 + flexWrap to prevent text cutting */}
+                        <View style={{ flex: 1, marginLeft: 10 }}>
+                          <Text style={[styles.cardCategory, { flexWrap: 'wrap' }]}>
+                            {exp.category} • {exp.subcategory}
+                          </Text>
+                          {exp.notes && (
+                            <Text style={styles.cardNotes} numberOfLines={1}>
+                              {exp.notes}
+                            </Text>
+                          )}
+                          <Text style={styles.cardPaidBy}>Paid by {exp.paid_by}</Text>
+                        </View>
+                      </View>
+                      <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                        <TouchableOpacity onPress={() => handleEdit(exp)} style={styles.editIconButton}>
+                          <Ionicons name="pencil" size={16} color="#3B82F6" />
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => handleDelete(exp._id)} style={styles.deleteIconButton}>
+                          <Ionicons name="trash" size={16} color="#EF4444" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ))
+                )}
+              </>
             ) : (
               // Bills List
               bills.length === 0 ? (
@@ -922,47 +956,53 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  // ✅ CHANGE #4: New dark-themed Summary Card styles
   summaryCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 12,
-    padding: 16,
-    marginHorizontal: 16,
-    marginTop: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  summaryTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  summaryItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  summaryDivider: {
-    width: 1,
-    height: 40,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: '#1F2937',
+    borderRadius: 15,
+    padding: 20,
+    marginBottom: 20,
   },
   summaryLabel: {
+    color: '#9CA3AF',
     fontSize: 12,
-    color: '#6B7280',
-    marginBottom: 4,
   },
-  summaryValue: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#EF4444',
+  grandTotal: {
+    color: '#fff',
+    fontSize: 28,
+    fontWeight: 'bold',
+  },
+  splitRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: '#374151',
+    paddingTop: 15,
+    marginTop: 10,
+  },
+  splitLabel: {
+    color: '#9CA3AF',
+    fontSize: 11,
+  },
+  splitValue: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  splitDivider: {
+    width: 1,
+    backgroundColor: '#374151',
+    height: '100%',
+  },
+  // ✅ CHANGE #4: Filter picker style
+  filterPickerContainer: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    height: 45,
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   tabContainer: {
     flexDirection: 'row',
