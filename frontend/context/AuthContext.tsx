@@ -4,6 +4,7 @@ import NetInfo from '@react-native-community/netinfo';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
+import { registerForPushNotificationsAsync } from '../app/_layout';
 
 // ✅ Updated to correct backend URL
 const BACKEND_URL = "https://wazir-dairy-farm-1.onrender.com";
@@ -59,6 +60,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       sendTokenToBackend(user.name, expoPushToken);
     }
   }, [expoPushToken, user]);
+
+  // ✅ NEW: Sync push token using the exported function from _layout
+  useEffect(() => {
+    const syncPushToken = async () => {
+      if (user && user.name) { // Jab user login ho jaye
+        const token = await registerForPushNotificationsAsync();
+        if (token) {
+          try {
+            await fetch(`${BACKEND_URL}/api/auth/update-push-token`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                name: user.name, // Backend yahi 'name' mang raha hai
+                expo_push_token: token
+              }),
+            });
+            console.log("✅ Push Token Updated for:", user.name);
+          } catch (error) {
+            console.error("❌ Token sync failed:", error);
+          }
+        }
+      }
+    };
+
+    syncPushToken();
+  }, [user]); // User login/logout par trigger hoga
 
   const setupNotifications = async () => {
     try {
