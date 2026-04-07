@@ -333,7 +333,25 @@ export default function DashboardScreen() {
 
   // FEEDBACK #2: Calculate Net DLS
   const netDLS = (stats?.total_dls || 0) - (stats?.total_expenditure || 0);
+  
+  useFocusEffect(
+      React.useCallback(() => {
+        scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+        fetchStats();
+        fetchChartData();
+        fetchDLS();
+  
+        // This is the part usually missing:
+        return () => {}; // Optional cleanup function
+      }, []) // Closes useCallback
+    ); // Closes useFocusEffect
 
+  useEffect(() => {
+      if (!isLoading && !user) {
+        router.replace('/');
+      }
+    }, [user, isLoading]);
+  
   return (
     <ImageBackground source={BACKGROUND_IMAGE} style={styles.background} resizeMode="cover">
       <View style={styles.overlay}>
@@ -342,21 +360,6 @@ export default function DashboardScreen() {
           style={styles.container}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         >
-          useFocusEffect(
-    React.useCallback(() => {
-      scrollViewRef.current?.scrollTo({ y: 0, animated: false });
-      fetchStats();
-      fetchChartData();
-      fetchDLS();
-      fetchEvents();
-    }, [])
-  );
-
-  useEffect(() => {
-      if (!isLoading && !user) {
-        router.replace('/');
-      }
-    }, [user, isLoading]);
 
   // ✅ FIX #2: State for the Month/Year filter
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
