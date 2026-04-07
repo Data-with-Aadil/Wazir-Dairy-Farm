@@ -156,7 +156,7 @@ export default function ExpenditureScreen() {
       const response = await fetch(`${BACKEND_URL}/api/expenditures`);
       if (response.ok) {
         const data = await response.json();
-        setExpenditures(data.slice(0, 20));
+        setExpenditures();
       }
     } catch (error) {
       console.error('Error fetching expenditures:', error);
@@ -698,7 +698,7 @@ export default function ExpenditureScreen() {
           <View style={styles.modalOverlay}>
             <KeyboardAvoidingView
               behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-              style={{ flex: 1, justifyContent: 'flex-end' }}
+              style={styles.modalContent}
             >
               <View style={styles.modalContent}>
                 <View style={styles.modalHeader}>
@@ -817,7 +817,7 @@ export default function ExpenditureScreen() {
           <View style={styles.modalOverlay}>
             <KeyboardAvoidingView
               behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-              style={{ flex: 1, justifyContent: 'flex-end' }}
+              style={styles.modalContent}
             >
               <View style={styles.modalContent}>
                 <View style={styles.modalHeader}>
