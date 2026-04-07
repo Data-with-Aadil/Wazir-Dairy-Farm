@@ -54,7 +54,7 @@ interface DLS {
 const screenWidth = Dimensions.get('window').width;
 
 export default function DashboardScreen() {
-  const { user, logout } = useAuth();
+  const { user, logout, isLoading } = useAuth(); // Added isLoading
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [milkSales, setMilkSales] = useState<MilkSale[]>([]);
@@ -68,8 +68,8 @@ export default function DashboardScreen() {
   const [eventDescription, setEventDescription] = useState('');
   const [reminder, setReminder] = useState('none');
   const [addingEvent, setAddingEvent] = useState(false);
-  // const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().split('T')[0].substring(0, 7));
   const scrollViewRef = React.useRef<ScrollView>(null);
+  const [loading, setLoading] = useState(true); // Added loading state
 
   useEffect(() => {
       if (!isLoading && !user) {
@@ -286,17 +286,17 @@ export default function DashboardScreen() {
   <p>Generated on ${new Date().toLocaleDateString()}</p>
   
   <h2>Total Investment</h2>
-  <p><strong>Total:</strong> ₹${stats?.total_investment.toLocaleString('en-IN') || '0'}</p>
-  <p><strong>Aadil:</strong> ₹${stats?.aadil_investment.toLocaleString('en-IN') || '0'}</p>
-  <p><strong>Imran:</strong> ₹${stats?.imran_investment.toLocaleString('en-IN') || '0'}</p>
+  <p><strong>Total:</strong> ₹${(stats?.total_investment ?? 0).toLocaleString('en-IN')}</p>
+  <p><strong>Aadil:</strong> ₹${(stats?.aadil_investment ?? 0).toLocaleString('en-IN')}</p>
+  <p><strong>Imran:</strong> ₹${(stats?.imran_investment ?? 0).toLocaleString('en-IN')}</p>
   
   <h2>Monthly Performance</h2>
-  <p><strong>Earnings:</strong> ₹${stats?.total_earnings.toLocaleString('en-IN') || '0'}</p>
-  <p><strong>Expenditure:</strong> ₹${stats?.total_expenditure.toLocaleString('en-IN') || '0'}</p>
-  <p><strong>Net Profit:</strong> ₹${stats?.net_profit.toLocaleString('en-IN') || '0'}</p>
+  <p><strong>Earnings:</strong> ₹${(stats?.total_earnings ?? 0).toLocaleString('en-IN')}</p>
+  <p><strong>Expenditure:</strong> ₹${(stats?.total_expenditure ?? 0).toLocaleString('en-IN')}</p>
+  <p><strong>Net Profit:</strong> ₹${(stats?.net_profit ?? 0).toLocaleString('en-IN')}</p>
   
   <h2>Dairy Lock Sales</h2>
-  <p><strong>Total:</strong> ₹${stats?.total_dls.toLocaleString('en-IN') || '0'}</p>
+  <p><strong>Total:</strong> ₹${(stats?.total_dls ?? 0).toLocaleString('en-IN')}</p>
   <p><strong>Current Month:</strong> ₹${currentMonthDLS.toLocaleString('en-IN')}</p>
 </body>
 </html>
@@ -328,12 +328,18 @@ export default function DashboardScreen() {
 
   const filteredEvents = events.filter((event: any) => {
     const eventMonth = event.date.substring(0, 7);
-    return eventMonth === selectedMonth;
+    // Make sure the selected month and year are correctly formatted for comparison
+    const formattedSelectedMonthYear = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
+    return eventMonth === formattedSelectedMonthYear;
   });
 
   // FEEDBACK #2: Calculate Net DLS
   const netDLS = (stats?.total_dls || 0) - (stats?.total_expenditure || 0);
   
+  // This useFocusEffect seems to be a duplicate or intended for a different purpose.
+  // It doesn't have dependencies, so it would run once on mount and on subsequent navigations
+  // if the component were unmounted/remounted. The primary fetch logic is in the first useFocusEffect.
+  // Keeping it as is based on the prompt to extract everything.
   useFocusEffect(
       React.useCallback(() => {
         scrollViewRef.current?.scrollTo({ y: 0, animated: false });
@@ -346,11 +352,14 @@ export default function DashboardScreen() {
       }, []) // Closes useCallback
     ); // Closes useFocusEffect
 
-  useEffect(() => {
-      if (!isLoading && !user) {
-        router.replace('/');
-      }
-    }, [user, isLoading]);
+  // NOTE: This useEffect is a duplicate of the one above (same logic, same deps).
+  // It causes the redirect check to run twice. Removed to fix the duplicate execution.
+  // Original was:
+  // useEffect(() => {
+  //     if (!isLoading && !user) {
+  //       router.replace('/');
+  //     }
+  //   }, [user, isLoading]);
   
   return (
     <ImageBackground source={BACKGROUND_IMAGE} style={styles.background} resizeMode="cover">
@@ -360,268 +369,6 @@ export default function DashboardScreen() {
           style={styles.container}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         >
-
-  // ✅ FIX #2: State for the Month/Year filter
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-
-  const setupUsers = async () => {
-    try {
-      await fetch(`${BACKEND_URL}/api/auth/setup`, { method: 'POST' });
-    } catch (error) {
-      console.error('Setup error:', error);
-    }
-  };
-
-  const fetchStats = async () => {
-      try {
-        // ✅ Add the query parameters here
-        const response = await fetch(
-          `${BACKEND_URL}/api/stats/dashboard?month=${selectedMonth}&year=${selectedYear}`
-        );
-        const data = await response.json();
-        setStats(data);
-      } catch (error) {
-        console.error("Fetch error:", error);
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
-      }
-    };
-  
-    // ✅ Add this so it refreshes whenever you change the month/year
-    useFocusEffect(
-      React.useCallback(() => {
-        scrollViewRef.current?.scrollTo({ y: 0, animated: false });
-        fetchStats(); // Ye ab automatic selectedMonth/Year le lega
-        fetchChartData();
-        fetchDLS();
-        fetchEvents();
-      }, [selectedMonth, selectedYear]) // In dono dependencies ko yahan zaroor likhna
-    );
-
-  const fetchChartData = async () => {
-    try {
-      const [salesRes, expendRes] = await Promise.all([
-        fetch(`${BACKEND_URL}/api/milk-sales`),
-        fetch(`${BACKEND_URL}/api/expenditures`),
-      ]);
-
-      if (salesRes.ok) {
-        const salesData = await salesRes.json();
-        setMilkSales(salesData);
-      }
-
-      if (expendRes.ok) {
-        const expendData = await expendRes.json();
-        setExpenditures(expendData);
-      }
-    } catch (error) {
-      console.error('Error fetching chart data:', error);
-    }
-  };
-
-  const fetchDLS = async () => {
-    try {
-      const response = await fetch(`${BACKEND_URL}/api/dairy-lock-sales`);
-      if (response.ok) {
-        const data = await response.json();
-        setDlsList(data);
-
-        const now = new Date();
-        const currentMonth = now.getMonth() + 1;
-        const currentYear = now.getFullYear();
-
-        const currentMonthTotal = data
-          .filter((dls: DLS) => dls.month === currentMonth && dls.year === currentYear)
-          .reduce((sum: number, dls: DLS) => sum + dls.amount, 0);
-
-        setCurrentMonthDLS(currentMonthTotal);
-      }
-    } catch (error) {
-      console.error('Error fetching DLS:', error);
-    }
-  };
-
-  const fetchEvents = async () => {
-    try {
-      const response = await fetch(`${BACKEND_URL}/api/events`);
-      if (response.ok) {
-        const data = await response.json();
-        setEvents(data);
-      }
-    } catch (error) {
-      console.error('Error fetching events:', error);
-    }
-  };
-
-  const calculateReminderDate = (eventDate: string, reminderType: string): string | undefined => {
-    if (reminderType === 'none') return undefined;
-
-    const date = new Date(eventDate);
-    switch (reminderType) {
-      case '15_days':
-        date.setDate(date.getDate() - 15);
-        break;
-      case '1_month':
-        date.setMonth(date.getMonth() - 1);
-        break;
-      case '3_months':
-        date.setMonth(date.getMonth() - 3);
-        break;
-      case '6_months':
-        date.setMonth(date.getMonth() - 6);
-        break;
-      case '1_year':
-        date.setFullYear(date.getFullYear() - 1);
-        break;
-      default:
-        return undefined;
-    }
-    return date.toISOString().split('T')[0];
-  };
-
-  const handleAddEvent = async () => {
-    if (!eventDescription.trim() || !selectedDate) {
-      Alert.alert('Error', 'Please select a date and enter description');
-      return;
-    }
-
-    setAddingEvent(true);
-    try {
-      const response = await fetch(`${BACKEND_URL}/api/events`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          date: selectedDate,
-          description: eventDescription.substring(0, 15),
-          created_by: user?.name,
-          reminder: reminder !== 'none' ? reminder : undefined,
-          reminder_date: calculateReminderDate(selectedDate, reminder),
-        }),
-      });
-
-      if (response.ok) {
-        Alert.alert('Success', 'Event added successfully');
-        setEventModalVisible(false);
-        setEventDescription('');
-        setSelectedDate('');
-        setReminder('none');
-        fetchEvents();
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to add event');
-    } finally {
-      setAddingEvent(false);
-    }
-  };
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    try {
-      await Promise.all([
-        fetchStats(),
-        fetchChartData(),
-        fetchDLS(),
-        fetchEvents()
-      ]);
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
-  // FEEDBACK #7: Fixed logout with router.replace
-  const handleLogout = () => {
-    Alert.alert('Logout', 'Are you sure you want to logout?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Logout',
-        style: 'destructive',
-        onPress: async () => {
-          await logout();
-          router.replace('/');
-        },
-      },
-    ]);
-  };
-
-  const exportToPDF = async () => {
-    try {
-      setExporting(true);
-
-      const html = `
-<!DOCTYPE html>
-<html>
-<head>
-  <style>
-    body { font-family: Arial, sans-serif; padding: 20px; }
-    h1 { color: #10B981; }
-    h2 { color: #374151; margin-top: 20px; }
-    p { color: #6B7280; }
-  </style>
-</head>
-<body>
-  <h1>🐄 Wazir Dairy Farming - Report (${selectedMonth}/${selectedYear})</h1>
-  <p>Generated on ${new Date().toLocaleDateString()}</p>
-  
-  <h2>Total Investment</h2>
-  <p><strong>Total:</strong> ₹${stats?.total_investment.toLocaleString('en-IN') || '0'}</p>
-  <p><strong>Aadil:</strong> ₹${stats?.aadil_investment.toLocaleString('en-IN') || '0'}</p>
-  <p><strong>Imran:</strong> ₹${stats?.imran_investment.toLocaleString('en-IN') || '0'}</p>
-  
-  <h2>Monthly Performance</h2>
-  <p><strong>Earnings:</strong> ₹${stats?.total_earnings.toLocaleString('en-IN') || '0'}</p>
-  <p><strong>Expenditure:</strong> ₹${stats?.total_expenditure.toLocaleString('en-IN') || '0'}</p>
-  <p><strong>Net Profit:</strong> ₹${stats?.net_profit.toLocaleString('en-IN') || '0'}</p>
-  
-  <h2>Dairy Lock Sales</h2>
-  <p><strong>Total:</strong> ₹${stats?.total_dls.toLocaleString('en-IN') || '0'}</p>
-  <p><strong>Current Month:</strong> ₹${currentMonthDLS.toLocaleString('en-IN')}</p>
-</body>
-</html>
-      `;
-
-      const { uri } = await Print.printToFileAsync({ html });
-
-      Alert.alert(
-        'PDF Generated',
-        'Dashboard report has been created. Would you like to share it?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Share',
-            onPress: async () => {
-              if (await Sharing.isAvailableAsync()) {
-                await Sharing.shareAsync(uri);
-              }
-            },
-          },
-        ]
-      );
-    } catch (error) {
-      Alert.alert('Error', 'Failed to generate PDF');
-    } finally {
-      setExporting(false);
-    }
-  };
-
-  const filteredEvents = events.filter((event: any) => {
-    const eventMonth = event.date.substring(0, 7);
-    return eventMonth === selectedMonth;
-  });
-
-  // FEEDBACK #2: Calculate Net DLS
-  const netDLS = (stats?.total_dls || 0) - (stats?.total_expenditure || 0);
-
-  return (
-    <ImageBackground source={BACKGROUND_IMAGE} style={styles.background} resizeMode="cover">
-      <View style={styles.overlay}>
-        <ScrollView
-          ref={scrollViewRef}
-          style={styles.container}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
           <View style={styles.filterCard}>
              <Text style={styles.filterLabel}>Performance Period:</Text>
              <View style={styles.pickerRow}>
@@ -646,7 +393,7 @@ export default function DashboardScreen() {
                 </View>
              </View>
           </View>
-        >
+        
           {/* Header */}
           <View style={styles.header}>
             <View>
@@ -673,7 +420,7 @@ export default function DashboardScreen() {
                 Total Investment
               </Text>
               <Text style={[styles.mainValue, styles.noWrap]} numberOfLines={1}>
-                ₹{stats?.total_investment.toLocaleString('en-IN') || '0'}
+                ₹{(stats?.total_investment ?? 0).toLocaleString('en-IN')}
               </Text>
               <View style={styles.divider} />
               <View style={styles.summaryRow}>
@@ -681,7 +428,7 @@ export default function DashboardScreen() {
                   Aadil
                 </Text>
                 <Text style={[styles.summaryValue, styles.noWrap]} numberOfLines={1}>
-                  ₹{stats?.aadil_investment.toLocaleString('en-IN') || '0'}
+                  ₹{(stats?.aadil_investment ?? 0).toLocaleString('en-IN')}
                 </Text>
               </View>
               <View style={styles.summaryRow}>
@@ -689,7 +436,7 @@ export default function DashboardScreen() {
                   Imran
                 </Text>
                 <Text style={[styles.summaryValue, styles.noWrap]} numberOfLines={1}>
-                  ₹{stats?.imran_investment.toLocaleString('en-IN') || '0'}
+                  ₹{(stats?.imran_investment ?? 0).toLocaleString('en-IN')}
                 </Text>
               </View>
             </View>
@@ -724,7 +471,7 @@ export default function DashboardScreen() {
                   Earnings
                 </Text>
                 <Text style={[styles.metricValue, styles.noWrap]} numberOfLines={1}>
-                  ₹{stats?.total_earnings.toLocaleString('en-IN') || '0'}
+                  ₹{(stats?.total_earnings ?? 0).toLocaleString('en-IN')}
                 </Text>
               </View>
               <View style={styles.metricItem}>
@@ -732,7 +479,7 @@ export default function DashboardScreen() {
                   Expenditure
                 </Text>
                 <Text style={[styles.metricValue, styles.noWrap]} numberOfLines={1}>
-                  ₹{stats?.total_expenditure.toLocaleString('en-IN') || '0'}
+                  ₹{(stats?.total_expenditure ?? 0).toLocaleString('en-IN')}
                 </Text>
               </View>
               <View style={styles.metricItem}>
@@ -747,7 +494,7 @@ export default function DashboardScreen() {
                   ]}
                   numberOfLines={1}
                 >
-                  ₹{stats?.net_profit.toLocaleString('en-IN') || '0'}
+                  ₹{(stats?.net_profit ?? 0).toLocaleString('en-IN')}
                 </Text>
               </View>
             </View>
@@ -762,7 +509,7 @@ export default function DashboardScreen() {
                   Total
                 </Text>
                 <Text style={[styles.dlsValue, styles.noWrap]} numberOfLines={1}>
-                  ₹{stats?.total_dls.toLocaleString('en-IN') || '0'}
+                  ₹{(stats?.total_dls ?? 0).toLocaleString('en-IN')}
                 </Text>
               </View>
               <View style={styles.stat}>
@@ -824,7 +571,9 @@ export default function DashboardScreen() {
                 setEventModalVisible(true);
               }}
               onMonthChange={(month: any) => {
-                setSelectedMonth(`${month.year}-${String(month.month).padStart(2, '0')}`);
+                // Correctly update selectedMonth and selectedYear when month changes
+                setSelectedMonth(month.month);
+                setSelectedYear(month.year);
               }}
               theme={{
                 selectedDayBackgroundColor: '#10B981',
@@ -835,7 +584,7 @@ export default function DashboardScreen() {
 
             <View style={styles.eventList}>
               <Text style={styles.eventListTitle} numberOfLines={1}>
-                Events - {new Date(selectedMonth + '-01').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}
+                Events - {new Date(selectedYear, selectedMonth - 1, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}
               </Text>
               {filteredEvents.map((event: any) => (
                 <View key={event._id} style={styles.eventItem}>
@@ -1236,5 +985,39 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 15, // FEEDBACK #3
     fontWeight: '600',
+  },
+  filterCard: { // Added for the filter section
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  filterLabel: { // Added for the filter label
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 10,
+  },
+  pickerRow: { // Added for the picker row
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  pickerWrapper: { // Added for individual picker wrapper
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    backgroundColor: '#F9FAFB',
+    justifyContent: 'center', // Center content vertically
+  },
+  picker: { // Added for the Picker component style
+    height: 40, // Adjust height as needed
+    width: '100%',
   },
 });
