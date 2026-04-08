@@ -3,8 +3,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
-import { router } from 'expo-router'; // Added router
-import { registerForPushNotificationsAsync } from '../app/_layout';
+import { router } from 'expo-router';
+import Constants from 'expo-constants';
 
 const BACKEND_URL = "https://wazir-dairy-farm-1.onrender.com";
 
@@ -31,19 +31,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isOnline, setIsOnline] = useState(true);
   const [expoPushToken, setExpoPushToken] = useState('');
   const notificationListener = useRef<any>();
+  const responseListener = useRef<any>();
 
   useEffect(() => {
     loadUser();
-    setupNetworkListener();
+    // ✅ FIX 1: Catch the unsubscribe function to prevent memory leaks
+    const unsubscribeNet = setupNetworkListener();
 
     if (Platform.OS !== 'web') {
       setupNotifications();
-      registerForPushNotifications();
     }
 
     return () => {
+      // ✅ FIX 1: Clean up the network listener when component unmounts
+      unsubscribeNet();
+
       if (notificationListener.current) {
         notificationListener.current.remove();
+      }
+      if (responseListener.current) {
+        responseListener.current.remove();
       }
     };
   }, []);
@@ -60,33 +67,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [expoPushToken, user]);
 
-  useEffect(() => {
-    const syncPushToken = async () => {
-      if (user && user.name) {
-        const token = await registerForPushNotificationsAsync();
-        if (token) {
-          try {
-            await fetch(`${BACKEND_URL}/api/auth/update-push-token`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                name: user.name,
-                expo_push_token: token
-              }),
-            });
-          } catch (error) {
-            console.error("Token sync failed:", error);
-          }
-        }
-      }
-    };
-
-    syncPushToken();
-  }, [user]);
-
   const setupNotifications = async () => {
     try {
+      // Dynamic import prevents web crash during SSR
       const Notifications = await import('expo-notifications');
+      
+      Notifications.setNotificationHandler({
+        handleNotification: async () => ({
+          shouldShowAlert: true,
+          shouldPlaySound: true,
+          shouldSetBadge: true,
+        }),
+      });
+
       if (Platform.OS === 'android') {
         await Notifications.setNotificationChannelAsync('default', {
           name: 'Default Notifications',
@@ -99,16 +92,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           showBadge: true,
         });
       }
-      Notifications.setNotificationHandler({
-        handleNotification: async () => ({
-          shouldShowAlert: true,
-          shouldPlaySound: true,
-          shouldSetBadge: true,
-        }),
-      });
+      
       notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
         console.log('Notification received:', notification);
       });
+
+      responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
+        const data = response.notification.request.content.data;
+        if (data?.screen) {
+          router.push(data.screen as any);
+        } else if (data?.type === 'event_reminder') {
+          router.push('/(tabs)');
+        } else {
+          router.push('/(tabs)/wrx');
+        }
+      });
+
+      registerForPushNotifications();
+      
     } catch (error) {
       console.error('Notification setup error:', error);
     }
@@ -122,10 +123,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const registerForPushNotifications = async () => {
-    if (Platform.OS === 'web') return;
+    if (!Device.isDevice) {
+      console.log('Must use physical device for Push Notifications');
+      return;
+    }
     try {
       const Notifications = await import('expo-notifications');
-      if (!Device.isDevice) return;
       const { status: existingStatus } = await Notifications.getPermissionsAsync();
       let finalStatus = existingStatus;
       if (existingStatus !== 'granted') {
@@ -134,7 +137,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       if (finalStatus !== 'granted') return;
       
-      const projectId = "1b758208-fbd5-44ae-a860-d75e4cce3809";
+      const projectId = Constants?.expoConfig?.extra?.eas?.projectId ?? Constants?.easConfig?.projectId ?? "1b758208-fbd5-44ae-a860-d75e4cce3809";
       const token = await Notifications.getExpoPushTokenAsync({ projectId });
       setExpoPushToken(token.data);
     } catch (error) {
@@ -193,7 +196,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = async () => {
     await AsyncStorage.removeItem('user');
     setUser(null);
-    router.replace('/'); // Immediately route back to login
+    router.replace('/'); 
   };
 
   const queueOperation = async (operation: any) => {
@@ -205,22 +208,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {}
   };
 
+  // ✅ FIX 2: Only clear successful operations from the offline queue
   const processPendingOperations = async () => {
     try {
       const queueData = await AsyncStorage.getItem('operationQueue');
       if (!queueData) return;
+      
       const queue = JSON.parse(queueData);
       if (queue.length === 0) return;
+      
+      const failedQueue = []; // Keep track of operations that fail
+      
       for (const operation of queue) {
         try {
-          await fetch(`${BACKEND_URL}${operation.endpoint}`, {
+          const response = await fetch(`${BACKEND_URL}${operation.endpoint}`, {
             method: operation.method,
             headers: { 'Content-Type': 'application/json' },
             body: operation.body ? JSON.stringify(operation.body) : undefined,
           });
-        } catch (error) {}
+          
+          if (!response.ok) {
+            // If server rejects it (e.g. 500 error), keep it in the queue to try later
+            failedQueue.push(operation);
+          }
+        } catch (error) {
+          // If internet drops during the loop, keep it in the queue
+          failedQueue.push(operation);
+        }
       }
-      await AsyncStorage.setItem('operationQueue', JSON.stringify([]));
+      
+      // Save only the failed operations back to the queue
+      await AsyncStorage.setItem('operationQueue', JSON.stringify(failedQueue));
     } catch (error) {}
   };
 
