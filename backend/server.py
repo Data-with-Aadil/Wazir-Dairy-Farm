@@ -649,9 +649,9 @@ async def get_dashboard_stats(month: Optional[int] = None, year: Optional[int] =
 
         start_date = datetime(target_year, target_month, 1).strftime("%Y-%m-%d")
         if target_month == 12:
-            end_date = datetime(target_year + 1, 1, 1).isoformat()
+            end_date = datetime(target_year + 1, 1, 1).strftime("%Y-%m-%d")
         else:
-            end_date = datetime(target_year, target_month + 1, 1).isoformat()
+            end_date = datetime(target_year, target_month + 1, 1).strftime("%Y-%m-%d")
 
         date_filter = {"date": {"$gte": start_date, "$lt": end_date}, "deleted": {"$ne": True}}
 
