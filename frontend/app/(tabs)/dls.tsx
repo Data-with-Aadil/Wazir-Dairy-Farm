@@ -130,7 +130,7 @@ export default function DLSScreen() {
           month: parseInt(month),
           year: parseInt(year),
           amount: amt,
-          date: date.toISOString().split('T')[0], // Use Date object formatted string
+          date: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`,
           notes: notes || undefined,
         }),
       });
@@ -180,7 +180,7 @@ export default function DLSScreen() {
           month: parseInt(month),
           year: parseInt(year),
           amount: amt,
-          date: date.toISOString().split('T')[0],
+          date: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`,
           notes: notes || undefined,
         }),
       });
