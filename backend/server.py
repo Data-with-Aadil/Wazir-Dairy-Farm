@@ -10,12 +10,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 from bson import ObjectId
 import httpx
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.cron import CronTrigger
 from pytz import timezone
-
-# 🆕 FEEDBACK #16: Import email reports module
-from email_reports import setup_email_scheduler
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -29,9 +24,7 @@ db = client[os.environ['DB_NAME']]
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
 
-# FEEDBACK #6: Initialize scheduler for reminder notifications
 IST = timezone('Asia/Kolkata')
-scheduler = AsyncIOScheduler(timezone=IST)
 
 # Helper to convert ObjectId to string
 def serialize_doc(doc):
@@ -39,7 +32,7 @@ def serialize_doc(doc):
         doc["_id"] = str(doc["_id"])
     return doc
 
-# FEEDBACK #5: Enhanced push notification helper
+# Enhanced push notification helper
 async def send_push_notification(from_user: str, title: str, body: str, data: Dict[str, Any] = None):
     """Send push notification to the other partner"""
     try:
@@ -52,8 +45,6 @@ async def send_push_notification(from_user: str, title: str, body: str, data: Di
 
         token = user_doc["expo_push_token"]
         
-        # Prepare the standard data payload for app routing
-        # If no specific screen is provided, default to the WRX activity tab
         payload_data = data or {}
         if "type" not in payload_data:
             payload_data["type"] = "activity"
@@ -89,10 +80,9 @@ async def send_push_notification(from_user: str, title: str, body: str, data: Di
     except Exception as e:
         logging.error(f"❌ Error sending push notification: {e}")
 
-# FEEDBACK #6: Check for event reminders daily
+# Check for event reminders daily
 async def check_event_reminders():
     try:
-        IST = timezone('Asia/Kolkata')
         today = datetime.now(IST).date().isoformat()
         logging.info(f"Checking event reminders for {today}")
         
@@ -117,7 +107,6 @@ async def check_event_reminders():
             for user_name in ["Aadil", "Imran"]:
                 user_doc = await db.users.find_one({"name": user_name})
                 if user_doc and user_doc.get("expo_push_token"):
-                    # Use a single httpx client session for better performance if possible
                     async with httpx.AsyncClient() as client_http:
                         await client_http.post(
                             'https://exp.host/--/api/v2/push/send',
@@ -125,7 +114,7 @@ async def check_event_reminders():
                                 "to": user_doc["expo_push_token"],
                                 "title": "Event Reminder",
                                 "body": body,
-                                "data": {"screen": "/(tabs)/", "type": "event_reminder"},
+                                "data": {"screen": "/(tabs)/wrx", "type": "event_reminder"},
                                 "sound": "default"
                             }
                         )
@@ -185,9 +174,8 @@ class DairyLockSale(BaseModel):
     deleted: bool = False
     created_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
 
-# 🆕 FEEDBACK #9: Bills model for image uploads
 class Bill(BaseModel):
-    image: str  # base64 encoded image
+    image: str 
     description: str
     amount: float
     date: str
@@ -196,20 +184,19 @@ class Bill(BaseModel):
     created_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
 
 class Notification(BaseModel):
-    type: str  # 'investment', 'expenditure', 'milk_sale', 'dls', 'deletion', 'event_reminder', 'bill'
+    type: str  
     data: Dict[str, Any]
     message: str
     read_by: List[str] = []
-    reactions: Dict[str, str] = {}  # {user: emoji}
+    reactions: Dict[str, str] = {} 
     created_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
 
-# FEEDBACK #6: Updated CalendarEvent model with reminder fields
 class CalendarEvent(BaseModel):
-    date: str  # YYYY-MM-DD format
-    description: str  # max 15 chars
+    date: str 
+    description: str 
     created_by: str
-    reminder: Optional[str] = None  # '15_days', '1_month', '3_months', '6_months', '1_year'
-    reminder_date: Optional[str] = None  # Calculated date when reminder should trigger
+    reminder: Optional[str] = None  
+    reminder_date: Optional[str] = None  
     deleted: bool = False
     created_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
 
@@ -269,7 +256,7 @@ async def create_investment(investment: Investment):
         investment.investor,
         "New Investment Added",
         f"{investment.investor} added Investment - {investment.category} - ₹{investment.amount:,.0f}",
-        {"screen": "wrx", "type": "investment"}
+        {"screen": "/(tabs)/wrx", "type": "investment"}
     )
     
     return {"success": True, "id": str(result.inserted_id)}
@@ -291,7 +278,7 @@ async def update_investment(investment_id: str, investment: Investment):
         investment.investor,
         "Investment Updated",
         f"{investment.investor} updated Investment - {investment.category} - ₹{investment.amount:,.0f}",
-        {"screen": "wrx", "type": "investment"}
+        {"screen": "/(tabs)/wrx", "type": "investment"}
     )
     
     return {"success": True}
@@ -323,7 +310,7 @@ async def delete_investment(investment_id: str, user: str):
         user,
         "Investment Deleted",
         f"{user} removed Investment - {inv['category']} - ₹{inv['amount']:,.0f}",
-        {"screen": "wrx", "type": "deletion"}
+        {"screen": "/(tabs)/wrx", "type": "deletion"}
     )
     
     return {"success": True}
@@ -344,7 +331,7 @@ async def create_expenditure(expenditure: Expenditure):
         expenditure.paid_by,
         "New Expenditure Added",
         f"{expenditure.paid_by} added Expenditure - {expenditure.category}/{expenditure.subcategory} - ₹{expenditure.amount:,.0f}",
-        {"screen": "wrx", "type": "expenditure"}
+        {"screen": "/(tabs)/wrx", "type": "expenditure"}
     )
     
     return {"success": True, "id": str(result.inserted_id)}
@@ -376,7 +363,7 @@ async def update_expenditure(expenditure_id: str, expenditure: Expenditure, user
         user,
         "Expenditure Updated",
         f"{user} updated Expenditure - {expenditure.category}/{expenditure.subcategory} - ₹{expenditure.amount:,.0f}",
-        {"screen": "wrx", "type": "expenditure"}
+        {"screen": "/(tabs)/wrx", "type": "expenditure"}
     )
     
     return {"success": True}
@@ -403,7 +390,7 @@ async def delete_expenditure(expenditure_id: str, user: str):
         user,
         "Expenditure Deleted",
         f"{user} removed Expenditure - {exp['category']}/{exp['subcategory']} - ₹{exp['amount']:,.0f}",
-        {"screen": "wrx", "type": "deletion"}
+        {"screen": "/(tabs)/wrx", "type": "deletion"}
     )
     
     return {"success": True}
@@ -424,7 +411,7 @@ async def create_milk_sale(sale: MilkSale):
         "System",
         "New Milk Sale",
         f"Milk Sale added for {sale.date} - ₹{sale.earnings:,.0f}",
-        {"screen": "wrx", "type": "milk_sale"}
+        {"screen": "/(tabs)/wrx", "type": "milk_sale"}
     )
     
     return {"success": True, "id": str(result.inserted_id)}
@@ -456,7 +443,7 @@ async def update_milk_sale(sale_id: str, sale: MilkSale, user: str):
         user,
         "Milk Sale Updated",
         f"{user} updated Milk Sale for {sale.date} - ₹{sale.earnings:,.0f}",
-        {"screen": "wrx", "type": "milk_sale"}
+        {"screen": "/(tabs)/wrx", "type": "milk_sale"}
     )
     
     return {"success": True}
@@ -483,7 +470,7 @@ async def delete_milk_sale(sale_id: str, user: str):
         user,
         "Milk Sale Deleted",
         f"{user} removed Milk Sale for {sale['date']}",
-        {"screen": "wrx", "type": "deletion"}
+        {"screen": "/(tabs)/wrx", "type": "deletion"}
     )
     
     return {"success": True}
@@ -504,7 +491,7 @@ async def create_dls(dls: DairyLockSale):
         "System",
         "New DLS Payment",
         f"Dairy Lock Sale added for {dls.month}/{dls.year} - ₹{dls.amount:,.0f}",
-        {"screen": "wrx", "type": "dls"}
+        {"screen": "/(tabs)/wrx", "type": "dls"}
     )
     
     return {"success": True, "id": str(result.inserted_id)}
@@ -536,7 +523,7 @@ async def update_dls(dls_id: str, dls: DairyLockSale, user: str):
         user,
         "DLS Updated",
         f"{user} updated Dairy Lock Sale for {dls.month}/{dls.year} - ₹{dls.amount:,.0f}",
-        {"screen": "wrx", "type": "dls"}
+        {"screen": "/(tabs)/wrx", "type": "dls"}
     )
     
     return {"success": True}
@@ -563,45 +550,40 @@ async def delete_dls(dls_id: str, user: str):
         user,
         "DLS Deleted",
         f"{user} removed Dairy Lock Sale for {dls['month']}/{dls['year']}",
-        {"screen": "wrx", "type": "deletion"}
+        {"screen": "/(tabs)/wrx", "type": "deletion"}
     )
     
     return {"success": True}
 
-# ==================== 🆕 BILLS ENDPOINTS (FEEDBACK #9) ====================
+# ==================== BILLS ENDPOINTS ====================
 
 @api_router.post("/bills")
 async def create_bill(bill: Bill):
-    """Upload a bill with compressed image"""
     result = await db.bills.insert_one(bill.dict())
     
-    # Create notification
     notif = Notification(
         type="bill",
-        data=bill.dict(exclude={"image"}),  # Don't include image in notification
+        data=bill.dict(exclude={"image"}),
         message=f"{bill.uploaded_by} uploaded Bill - {bill.description} - ₹{bill.amount:,.0f} on {bill.date}"
     )
     await db.notifications.insert_one(notif.dict())
     
-    # Send push notification
     await send_push_notification(
         bill.uploaded_by,
         "New Bill Uploaded",
         f"{bill.uploaded_by} uploaded Bill - {bill.description} - ₹{bill.amount:,.0f}",
-        {"screen": "wrx", "type": "bill"}
+        {"screen": "/(tabs)/wrx", "type": "bill"}
     )
     
     return {"success": True, "id": str(result.inserted_id)}
 
 @api_router.get("/bills")
 async def get_bills(deleted: bool = False):
-    """Get all bills"""
     bills = await db.bills.find({"deleted": deleted}).sort("created_at", -1).to_list(1000)
     return [serialize_doc(bill) for bill in bills]
 
 @api_router.delete("/bills/{bill_id}")
 async def delete_bill(bill_id: str, user: str):
-    """Soft delete a bill"""
     bill = await db.bills.find_one({"_id": ObjectId(bill_id)})
     if not bill:
         raise HTTPException(status_code=404, detail="Bill not found")
@@ -611,7 +593,6 @@ async def delete_bill(bill_id: str, user: str):
         {"$set": {"deleted": True}}
     )
     
-    # Create deletion notification
     notif = Notification(
         type="deletion",
         data={"type": "bill", "id": bill_id},
@@ -619,12 +600,11 @@ async def delete_bill(bill_id: str, user: str):
     )
     await db.notifications.insert_one(notif.dict())
     
-    # Send push notification
     await send_push_notification(
         user,
         "Bill Deleted",
         f"{user} removed Bill - {bill['description']}",
-        {"screen": "wrx", "type": "deletion"}
+        {"screen": "/(tabs)/wrx", "type": "deletion"}
     )
     
     return {"success": True}
@@ -633,10 +613,6 @@ async def delete_bill(bill_id: str, user: str):
 
 @api_router.get("/notifications")
 async def get_notifications(limit: int = 100):
-    """
-    🆕 FEEDBACK #6: Changed from 90 days to 30 days
-    Get notifications from last 30 days
-    """
     thirty_days_ago = datetime.utcnow() - timedelta(days=30)
     
     notifications = await db.notifications.find(
@@ -667,15 +643,11 @@ async def react_to_notification(data: ReactionUpdate):
 @api_router.get("/stats/dashboard")
 async def get_dashboard_stats(month: Optional[int] = None, year: Optional[int] = None):
     try:
-        # Default to current month/year if not provided
         now = datetime.now()
         target_month = month if month is not None else now.month
         target_year = year if year is not None else now.year
 
-        # Create date filter for the specific month
-        # Start of month
         start_date = datetime(target_year, target_month, 1).isoformat()
-        # Start of next month
         if target_month == 12:
             end_date = datetime(target_year + 1, 1, 1).isoformat()
         else:
@@ -683,20 +655,15 @@ async def get_dashboard_stats(month: Optional[int] = None, year: Optional[int] =
 
         date_filter = {"date": {"$gte": start_date, "$lt": end_date}, "deleted": {"$ne": True}}
 
-        # 1. Monthly Expenditures
         exp_docs = await db.expenditures.find(date_filter).to_list(1000)
         total_exp = sum(float(d.get("amount", 0)) for d in exp_docs)
 
-        # 2. Monthly Milk Earnings
         milk_docs = await db.milk_sales.find(date_filter).to_list(1000)
         total_earn = sum(float(d.get("earnings", 0)) for d in milk_docs)
 
-        # 3. Monthly DLS
         dls_docs = await db.dls.find(date_filter).to_list(1000)
         total_dls = sum(float(d.get("amount", 0)) for d in dls_docs)
 
-        # 4. Total Investment (Usually users want to see ALL-TIME investment, 
-        # but we can filter it if needed. Let's keep it all-time for now)
         inv_docs = await db.investments.find({"deleted": {"$ne": True}}).to_list(1000)
         total_inv = sum(float(d.get("amount", 0)) for d in inv_docs)
         aadil_inv = sum(float(d.get("amount", 0)) for d in inv_docs if d.get("investor") == "Aadil")
@@ -745,7 +712,6 @@ async def get_events(deleted: bool = False):
 
 @api_router.patch("/events/{event_id}")
 async def update_event(event_id: str, event: CalendarEvent):
-    """Update an existing event"""
     await db.events.update_one(
         {"_id": ObjectId(event_id)},
         {"$set": event.dict(exclude_unset=True)}
@@ -760,23 +726,35 @@ async def delete_event(event_id: str):
     )
     return {"success": True}
 
-# 🆕 FEEDBACK #16: Manual test endpoint for email reports
+# ==================== CRON ENDPOINTS ====================
+
+@api_router.get("/cron/daily-report")
+async def trigger_daily_report():
+    """Endpoint for cron-job.org to hit at 9 AM and 9 PM IST for Emails"""
+    from email_reports import send_daily_report
+    await send_daily_report()
+    return {"success": True, "message": "Daily report triggered"}
+
+@api_router.get("/cron/reminders")
+async def trigger_reminders():
+    """Endpoint for cron-job.org to hit at 9 AM IST to send event Push Notifications"""
+    await check_event_reminders()
+    return {"success": True, "message": "Reminders checked and sent if any"}
+
 @api_router.post("/test-email-report")
 async def test_email_report():
-    """Manual trigger for testing email reports"""
     from email_reports import send_daily_report
     await send_daily_report()
     return {"message": "Email report sent (check console logs)"}
 
-# Health check
-@api_router.get("/")
-async def root():
-    return {"message": "Wazir Dairy Farming API"}
+# Health check (Use this for your 14-minute Keep-Awake ping)
+@api_router.get("/health")
+async def health_check():
+    return {"status": "healthy", "timezone": "Asia/Kolkata", "time": datetime.now(IST).isoformat()}
 
 # Cleanup test data
 @api_router.delete("/test/cleanup")
 async def cleanup_test_data():
-    """Remove all test data from database"""
     try:
         await db.investments.delete_many({})
         await db.expenditures.delete_many({})
@@ -786,15 +764,7 @@ async def cleanup_test_data():
         await db.notifications.delete_many({})
         
         return {
-            "message": "All test data cleaned up successfully",
-            "deleted": {
-                "investments": "all",
-                "expenditures": "all",
-                "milk_sales": "all",
-                "dairy_lock_sales": "all",
-                "bills": "all",
-                "notifications": "all"
-            }
+            "message": "All test data cleaned up successfully"
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -813,33 +783,11 @@ app.add_middleware(
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# FEEDBACK #6 & #16: Start scheduler on app startup
 @app.on_event("startup")
 async def startup_event():
-    # Schedule daily reminder check at 9 AM
-    scheduler.add_job(
-        check_event_reminders,
-        CronTrigger(hour=9, minute=0),
-        id="event_reminder_check",
-        replace_existing=True
-    )
-    
-    # 🆕 FEEDBACK #16: Setup email reports (9 AM and 9 PM)
-    setup_email_scheduler(scheduler)
-    
-    if not scheduler.running:
-            scheduler.start()
-            
-            logging.info("🚀 Scheduler started successfully in Asia/Kolkata timezone")
-            logging.info("📅 Jobs: Daily Reports (9AM/9PM IST), Reminders (9AM IST)")
-
-@app.get("/api/health")
-async def health_check():
-    # Helpful for keeping the Render instance awake
-    return {"status": "healthy", "timezone": "Asia/Kolkata", "time": datetime.now(IST).isoformat()}
+    logging.info("🚀 Server started successfully in Asia/Kolkata timezone")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
-    scheduler.shutdown()
     client.close()
-    logging.info("Scheduler stopped and database connection closed")
+    logging.info("Database connection closed")
