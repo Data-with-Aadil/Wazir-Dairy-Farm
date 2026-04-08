@@ -226,8 +226,8 @@ export default function ExpenditureScreen() {
         // Compress image to reduce size
         const manipulatedImage = await ImageManipulator.manipulateAsync(
           result.assets[0].uri,
-          [{ resize: { width: 800 } }],
-          { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+          [{ resize: { width: 600 } }], // Reduced from 800 to 600
+          { compress: 0.3, format: ImageManipulator.SaveFormat.JPEG, base64: true } // Reduced compress from 0.6 to 0.3
         );
 
         if (manipulatedImage.base64) {
@@ -301,6 +301,7 @@ export default function ExpenditureScreen() {
     } catch (error) {
       console.error('❌ Upload error:', error);
       Alert.alert('Error', 'Failed to upload bill. Check your connection.');
+      resetBillForm();
     } finally {
       setLoading(false);
     }
