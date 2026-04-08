@@ -3,10 +3,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
-import Constants from 'expo-constants';
+import { router } from 'expo-router'; // Added router
 import { registerForPushNotificationsAsync } from '../app/_layout';
 
-// ✅ Updated to correct backend URL
 const BACKEND_URL = "https://wazir-dairy-farm-1.onrender.com";
 
 interface User {
@@ -61,10 +60,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [expoPushToken, user]);
 
-  // ✅ NEW: Sync push token using the exported function from _layout
   useEffect(() => {
     const syncPushToken = async () => {
-      if (user && user.name) { // Jab user login ho jaye
+      if (user && user.name) {
         const token = await registerForPushNotificationsAsync();
         if (token) {
           try {
@@ -72,26 +70,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                name: user.name, // Backend yahi 'name' mang raha hai
+                name: user.name,
                 expo_push_token: token
               }),
             });
-            console.log("✅ Push Token Updated for:", user.name);
           } catch (error) {
-            console.error("❌ Token sync failed:", error);
+            console.error("Token sync failed:", error);
           }
         }
       }
     };
 
     syncPushToken();
-  }, [user]); // User login/logout par trigger hoga
+  }, [user]);
 
   const setupNotifications = async () => {
     try {
       const Notifications = await import('expo-notifications');
-
-      // ✅ CRITICAL: Set up notification channels for Android
       if (Platform.OS === 'android') {
         await Notifications.setNotificationChannelAsync('default', {
           name: 'Default Notifications',
@@ -103,10 +98,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           enableLights: true,
           showBadge: true,
         });
-        console.log('✅ Android notification channel created');
       }
-
-      // Handle foreground notifications
       Notifications.setNotificationHandler({
         handleNotification: async () => ({
           shouldShowAlert: true,
@@ -114,15 +106,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           shouldSetBadge: true,
         }),
       });
-
-      // Listen for received notifications
       notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
-        console.log('✅ Notification received:', notification);
+        console.log('Notification received:', notification);
       });
-
-      console.log('✅ Notification handlers set up');
     } catch (error) {
-      console.error('❌ Notification setup error:', error);
+      console.error('Notification setup error:', error);
     }
   };
 
@@ -134,69 +122,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const registerForPushNotifications = async () => {
-    if (Platform.OS === 'web') {
-      console.log('⚠️ Push notifications not supported on web');
-      return;
-    }
-
+    if (Platform.OS === 'web') return;
     try {
       const Notifications = await import('expo-notifications');
-
-      if (!Device.isDevice) {
-        console.log('⚠️ Push notifications only work on physical devices');
-        return;
-      }
-
-      console.log('🔔 Requesting notification permissions...');
-
+      if (!Device.isDevice) return;
       const { status: existingStatus } = await Notifications.getPermissionsAsync();
       let finalStatus = existingStatus;
-
       if (existingStatus !== 'granted') {
         const { status } = await Notifications.requestPermissionsAsync();
         finalStatus = status;
       }
-
-      if (finalStatus !== 'granted') {
-        console.log('❌ Notification permission denied');
-        return;
-      }
-
-      console.log('✅ Notification permission granted');
-
-      // ✅ Using provided Project ID to ensure token generation
+      if (finalStatus !== 'granted') return;
+      
       const projectId = "1b758208-fbd5-44ae-a860-d75e4cce3809";
-
-      const token = await Notifications.getExpoPushTokenAsync({
-        projectId: projectId
-      });
-
-      console.log('✅ Push token obtained:', token.data);
+      const token = await Notifications.getExpoPushTokenAsync({ projectId });
       setExpoPushToken(token.data);
     } catch (error) {
-      console.error('❌ Push token error:', error);
+      console.error('Push token error:', error);
     }
   };
 
   const sendTokenToBackend = async (userName: string, token: string) => {
     try {
-      console.log(`📤 Sending token to backend for ${userName}: ${token}`);
-      const response = await fetch(`${BACKEND_URL}/api/auth/update-push-token`, {
+      await fetch(`${BACKEND_URL}/api/auth/update-push-token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: userName,
-          expo_push_token: token,
-        }),
+        body: JSON.stringify({ name: userName, expo_push_token: token }),
       });
-
-      if (response.ok) {
-        console.log('✅ Token sent to backend successfully');
-      } else {
-        console.error('❌ Failed to send token:', await response.text());
-      }
     } catch (error) {
-      console.error('❌ Error sending token to backend:', error);
+      console.error('Error sending token to backend:', error);
     }
   };
 
@@ -204,8 +158,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const userData = await AsyncStorage.getItem('user');
       if (userData) {
-        const parsedUser = JSON.parse(userData);
-        setUser(parsedUser);
+        setUser(JSON.parse(userData));
       }
     } catch (error) {
       console.error('Load user error:', error);
@@ -226,17 +179,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const data = await response.json();
         await AsyncStorage.setItem('user', JSON.stringify(data.user));
         setUser(data.user);
-        
-        // If we already have a token, send it immediately after login
         if (expoPushToken) {
           sendTokenToBackend(data.user.name, expoPushToken);
         }
-        
         return true;
       }
       return false;
     } catch (error) {
-      console.error('Login error:', error);
       return false;
     }
   };
@@ -244,6 +193,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = async () => {
     await AsyncStorage.removeItem('user');
     setUser(null);
+    router.replace('/'); // Immediately route back to login
   };
 
   const queueOperation = async (operation: any) => {
@@ -252,19 +202,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const queue = existingQueue ? JSON.parse(existingQueue) : [];
       queue.push({ ...operation, timestamp: Date.now() });
       await AsyncStorage.setItem('operationQueue', JSON.stringify(queue));
-    } catch (error) {
-      console.error('Queue error:', error);
-    }
+    } catch (error) {}
   };
 
   const processPendingOperations = async () => {
     try {
       const queueData = await AsyncStorage.getItem('operationQueue');
       if (!queueData) return;
-
       const queue = JSON.parse(queueData);
       if (queue.length === 0) return;
-
       for (const operation of queue) {
         try {
           await fetch(`${BACKEND_URL}${operation.endpoint}`, {
@@ -272,28 +218,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             headers: { 'Content-Type': 'application/json' },
             body: operation.body ? JSON.stringify(operation.body) : undefined,
           });
-        } catch (error) {
-          console.error('Process op error:', error);
-        }
+        } catch (error) {}
       }
-
       await AsyncStorage.setItem('operationQueue', JSON.stringify([]));
-    } catch (error) {
-      console.error('Queue process error:', error);
-    }
+    } catch (error) {}
   };
 
   return (
     <AuthContext.Provider
-      value={{
-        user,
-        login,
-        logout,
-        isLoading,
-        isOnline,
-        queueOperation,
-        processPendingOperations,
-      }}
+      value={{ user, login, logout, isLoading, isOnline, queueOperation, processPendingOperations }}
     >
       {children}
     </AuthContext.Provider>
@@ -302,8 +235,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within AuthProvider');
   return context;
 };
