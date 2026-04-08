@@ -647,7 +647,7 @@ async def get_dashboard_stats(month: Optional[int] = None, year: Optional[int] =
         target_month = month if month is not None else now.month
         target_year = year if year is not None else now.year
 
-        start_date = datetime(target_year, target_month, 1).isoformat()
+        start_date = datetime(target_year, target_month, 1).strftime("%Y-%m-%d")
         if target_month == 12:
             end_date = datetime(target_year + 1, 1, 1).isoformat()
         else:
