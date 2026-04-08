@@ -313,13 +313,17 @@ export default function WRXScreen() {
     return eventMonth === selectedMonth;
   });
 
-  // Get marked dates for calendar
+// Get marked dates for calendar
   const markedDates = events.reduce((acc: any, event) => {
     if (!event.deleted) {
-      // Red dot for events with reminders, green for regular events
+      const isReminder = !!event.reminder;
+      const existing = acc[event.date];
+      // Prioritize red dot if ANY event on this day is a reminder
+      const shouldBeRed = isReminder || (existing && existing.dotColor === '#EF4444');
+      
       acc[event.date] = { 
         marked: true, 
-        dotColor: event.reminder ? '#EF4444' : '#10B981'  // Red for reminders
+        dotColor: shouldBeRed ? '#EF4444' : '#10B981'
       };
     }
     return acc;
