@@ -262,7 +262,7 @@ export default function ExpenditureScreen() {
       const billData: any = {
         image: billImage,
         description: billDescription.trim(),
-        date: billDate.toISOString().split('T')[0],
+        date: `${billDate.getFullYear()}-${String(billDate.getMonth() + 1).padStart(2, '0')}-${String(billDate.getDate()).padStart(2, '0')}`,
         uploaded_by: user?.name || 'Unknown',
       };
 
@@ -379,7 +379,7 @@ export default function ExpenditureScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           amount: amt,
-          date: date.toISOString().split('T')[0],
+          date: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`,
           paid_by: paidBy,
           category,
           subcategory,
@@ -433,7 +433,7 @@ export default function ExpenditureScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           amount: amt,
-          date: date.toISOString().split('T')[0],
+          date: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`,
           paid_by: paidBy,
           category,
           subcategory,
