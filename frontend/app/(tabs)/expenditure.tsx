@@ -156,7 +156,7 @@ export default function ExpenditureScreen() {
       const response = await fetch(`${BACKEND_URL}/api/expenditures`);
       if (response.ok) {
         const data = await response.json();
-        setExpenditures();
+        setExpenditures(data);
       }
     } catch (error) {
       console.error('Error fetching expenditures:', error);
