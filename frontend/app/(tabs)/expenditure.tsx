@@ -26,7 +26,7 @@ import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 
 const BACKGROUND_IMAGE = require('../../assets/images/0vjmy7gj_1000044672.jpg');
-const BACKEND_URL = "https://wazir-dairy-farm.onrender.com";
+const BACKEND_URL = "https://wazir-dairy-farm-1.onrender.com";
 
 const CATEGORIES = {
   Supplements: [
