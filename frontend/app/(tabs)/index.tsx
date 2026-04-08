@@ -467,9 +467,14 @@ export default function DashboardScreen() {
               markedDates={{
                 ...events.reduce((acc: any, event: any) => {
                   if (!event.deleted) {
+                    const isReminder = !!event.reminder;
+                    const existing = acc[event.date];
+                    // Prioritize red dot if ANY event on this day is a reminder
+                    const shouldBeRed = isReminder || (existing && existing.dotColor === '#EF4444');
+                    
                     acc[event.date] = {
                       marked: true,
-                      dotColor: event.reminder ? '#EF4444' : '#10B981',
+                      dotColor: shouldBeRed ? '#EF4444' : '#10B981',
                       customStyles: {
                         container: {
                           backgroundColor: '#F0FDF4',
