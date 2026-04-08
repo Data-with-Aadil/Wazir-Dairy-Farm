@@ -11,6 +11,7 @@ import {
   Dimensions,
   Modal,
   TextInput,
+  Platform,
   KeyboardAvoidingView,
   ActivityIndicator,
 } from 'react-native';
