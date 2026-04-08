@@ -204,7 +204,7 @@ export default function WRXScreen() {
     }
 
     const eventData = {
-      date: eventDate.toISOString().split('T')[0],
+      date: `${eventDate.getFullYear()}-${String(eventDate.getMonth() + 1).padStart(2, '0')}-${String(eventDate.getDate()).padStart(2, '0')}`,
       description: description.trim(),
       created_by: user?.name || 'Unknown',
       reminder: reminder !== 'none' ? reminder : undefined,
