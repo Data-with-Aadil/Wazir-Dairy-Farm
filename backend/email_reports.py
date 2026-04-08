@@ -186,27 +186,3 @@ async def send_daily_report():
 
     except Exception as e:
         print(f"❌ Error sending daily report: {e}")
-
-def setup_email_scheduler(scheduler):
-    """Setup cron jobs for 9 AM and 9 PM daily reports in IST"""
-    from apscheduler.triggers.cron import CronTrigger
-
-    # 9 AM daily report
-    scheduler.add_job(
-        send_daily_report,
-        CronTrigger(hour=9, minute=0, timezone=IST),
-        id="daily_report_9am",
-        name="Daily Email Report (9 AM IST)",
-        replace_existing=True
-    )
-
-    # 9 PM daily report
-    scheduler.add_job(
-        send_daily_report,
-        CronTrigger(hour=21, minute=0, timezone=IST),
-        id="daily_report_9pm",
-        name="Daily Email Report (9 PM IST)",
-        replace_existing=True
-    )
-
-    print("✅ Email scheduler configured: Reports at 9 AM and 9 PM IST daily")
