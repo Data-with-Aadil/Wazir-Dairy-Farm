@@ -22,7 +22,7 @@ import { useFocusEffect } from 'expo-router';
 
 // FEEDBACK #3 & #9: Add background image
 const BACKGROUND_IMAGE = require('../../assets/images/0vjmy7gj_1000044672.jpg');
-const BACKEND_URL = "https://wazir-dairy-farm.onrender.com";
+const BACKEND_URL = "https://wazir-dairy-farm-1.onrender.com";
 
 const CATEGORIES = [
   'Shed / Infrastructure',
