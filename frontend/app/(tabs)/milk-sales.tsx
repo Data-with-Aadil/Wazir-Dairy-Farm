@@ -130,7 +130,7 @@ export default function MilkSalesScreen() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          date: date.toISOString().split('T')[0],
+          date: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`,
           volume: vol,
           fat_percentage: fat,
           rate: r,
@@ -184,7 +184,7 @@ export default function MilkSalesScreen() {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          date: date.toISOString().split('T')[0],
+          date: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`,
           volume: vol,
           fat_percentage: fat,
           rate: r,
