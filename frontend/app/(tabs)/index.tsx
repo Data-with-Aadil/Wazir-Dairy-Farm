@@ -54,7 +54,7 @@ interface DLS {
 const screenWidth = Dimensions.get('window').width;
 
 export default function DashboardScreen() {
-  const { user, logout, isLoading } = useAuth(); // Added isLoading
+  const { user, logout, isLoading } = useAuth();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [milkSales, setMilkSales] = useState<MilkSale[]>([]);
@@ -69,15 +69,14 @@ export default function DashboardScreen() {
   const [reminder, setReminder] = useState('none');
   const [addingEvent, setAddingEvent] = useState(false);
   const scrollViewRef = React.useRef<ScrollView>(null);
-  const [loading, setLoading] = useState(true); // Added loading state
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-      if (!isLoading && !user) {
-        router.replace('/');
-      }
-    }, [user, isLoading]);
+    if (!isLoading && !user) {
+      router.replace('/');
+    }
+  }, [user, isLoading]);
 
-  // ✅ FIX #2: State for the Month/Year filter
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
@@ -90,34 +89,29 @@ export default function DashboardScreen() {
   };
 
   const fetchStats = async () => {
-      try {
-        // ✅ Add the query parameters here
-        const response = await fetch(
-          `${BACKEND_URL}/api/stats/dashboard?month=${selectedMonth}&year=${selectedYear}`
-        );
-        const data = await response.json();
-        setStats(data);
-      } catch (error) {
-        console.error("Fetch error:", error);
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
-      }
-    };
+    try {
+      const response = await fetch(
+        `${BACKEND_URL}/api/stats/dashboard?month=${selectedMonth}&year=${selectedYear}`
+      );
+      const data = await response.json();
+      setStats(data);
+    } catch (error) {
+      console.error("Fetch error:", error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
   
-    // ✅ Add this so it refreshes whenever you change the month/year
-    useFocusEffect(
-      React.useCallback(() => {
-        // Screen focus par scroll top karein
-        scrollViewRef.current?.scrollTo({ y: 0, animated: false });
-        
-        // Saara data fetch karein
-        fetchStats();
-        fetchChartData();
-        fetchDLS();
-        fetchEvents();
-      }, [selectedMonth, selectedYear]) // In dono ke change hote hi data refresh hoga
-    );
+  useFocusEffect(
+    React.useCallback(() => {
+      scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+      fetchStats();
+      fetchChartData();
+      fetchDLS();
+      fetchEvents();
+    }, [selectedMonth, selectedYear])
+  );
 
   const fetchChartData = async () => {
     try {
@@ -147,12 +141,8 @@ export default function DashboardScreen() {
         const data = await response.json();
         setDlsList(data);
 
-        const now = new Date();
-        const currentMonth = now.getMonth() + 1;
-        const currentYear = now.getFullYear();
-
         const currentMonthTotal = data
-          .filter((dls: DLS) => dls.month === currentMonth && dls.year === currentYear)
+          .filter((dls: DLS) => dls.month === selectedMonth && dls.year === selectedYear)
           .reduce((sum: number, dls: DLS) => sum + dls.amount, 0);
 
         setCurrentMonthDLS(currentMonthTotal);
@@ -251,7 +241,6 @@ export default function DashboardScreen() {
     }
   };
 
-  // FEEDBACK #7: Fixed logout with router.replace
   const handleLogout = () => {
     Alert.alert('Logout', 'Are you sure you want to logout?', [
       { text: 'Cancel', style: 'cancel' },
@@ -260,7 +249,6 @@ export default function DashboardScreen() {
         style: 'destructive',
         onPress: async () => {
           await logout();
-          router.replace('/');
         },
       },
     ]);
@@ -328,38 +316,11 @@ export default function DashboardScreen() {
 
   const filteredEvents = events.filter((event: any) => {
     const eventMonth = event.date.substring(0, 7);
-    // Make sure the selected month and year are correctly formatted for comparison
     const formattedSelectedMonthYear = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
     return eventMonth === formattedSelectedMonthYear;
   });
 
-  // FEEDBACK #2: Calculate Net DLS
   const netDLS = (stats?.total_dls || 0) - (stats?.total_expenditure || 0);
-  
-  // This useFocusEffect seems to be a duplicate or intended for a different purpose.
-  // It doesn't have dependencies, so it would run once on mount and on subsequent navigations
-  // if the component were unmounted/remounted. The primary fetch logic is in the first useFocusEffect.
-  // Keeping it as is based on the prompt to extract everything.
-  useFocusEffect(
-      React.useCallback(() => {
-        scrollViewRef.current?.scrollTo({ y: 0, animated: false });
-        fetchStats();
-        fetchChartData();
-        fetchDLS();
-  
-        // This is the part usually missing:
-        return () => {}; // Optional cleanup function
-      }, []) // Closes useCallback
-    ); // Closes useFocusEffect
-
-  // NOTE: This useEffect is a duplicate of the one above (same logic, same deps).
-  // It causes the redirect check to run twice. Removed to fix the duplicate execution.
-  // Original was:
-  // useEffect(() => {
-  //     if (!isLoading && !user) {
-  //       router.replace('/');
-  //     }
-  //   }, [user, isLoading]);
   
   return (
     <ImageBackground source={BACKGROUND_IMAGE} style={styles.background} resizeMode="cover">
@@ -388,17 +349,16 @@ export default function DashboardScreen() {
                     onValueChange={(val) => setSelectedYear(val)}
                     style={styles.picker}
                   >
-                    {[2024, 2025, 2026].map(y => <Picker.Item key={y} label={y.toString()} value={y} />)}
+                    {[2024, 2025, 2026, 2027].map(y => <Picker.Item key={y} label={y.toString()} value={y} />)}
                   </Picker>
                 </View>
              </View>
           </View>
         
-          {/* Header */}
           <View style={styles.header}>
             <View>
               <Text style={styles.greeting}>Welcome back,</Text>
-              <Text style={styles.userName} numberOfLines={1}>
+              <Text style={styles.userName} adjustsFontSizeToFit minimumFontScale={0.8} numberOfLines={1}>
                 {user?.name || 'User'}
               </Text>
             </View>
@@ -412,87 +372,59 @@ export default function DashboardScreen() {
             </View>
           </View>
 
-          {/* FEEDBACK #2: Investment and Net DLS Side by Side */}
           <View style={styles.twoColumnRow}>
-            {/* Total Investment Card */}
             <View style={styles.halfCard}>
-              <Text style={styles.cardTitle} numberOfLines={1}>
-                Total Investment
-              </Text>
-              <Text style={[styles.mainValue, styles.noWrap]} numberOfLines={1}>
+              <Text style={styles.cardTitle} numberOfLines={1}>Total Investment</Text>
+              <Text style={styles.mainValue} adjustsFontSizeToFit minimumFontScale={0.6} numberOfLines={1}>
                 ₹{(stats?.total_investment ?? 0).toLocaleString('en-IN')}
               </Text>
               <View style={styles.divider} />
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel} numberOfLines={1}>
-                  Aadil
-                </Text>
-                <Text style={[styles.summaryValue, styles.noWrap]} numberOfLines={1}>
+                <Text style={styles.summaryLabel} numberOfLines={1}>Aadil</Text>
+                <Text style={styles.summaryValue} adjustsFontSizeToFit minimumFontScale={0.6} numberOfLines={1}>
                   ₹{(stats?.aadil_investment ?? 0).toLocaleString('en-IN')}
                 </Text>
               </View>
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel} numberOfLines={1}>
-                  Imran
-                </Text>
-                <Text style={[styles.summaryValue, styles.noWrap]} numberOfLines={1}>
+                <Text style={styles.summaryLabel} numberOfLines={1}>Imran</Text>
+                <Text style={styles.summaryValue} adjustsFontSizeToFit minimumFontScale={0.6} numberOfLines={1}>
                   ₹{(stats?.imran_investment ?? 0).toLocaleString('en-IN')}
                 </Text>
               </View>
             </View>
 
-            {/* Net DLS Card - FEEDBACK #2: No calculation text visible */}
             <View style={styles.halfCard}>
-              <Text style={styles.cardTitle} numberOfLines={1}>
-                Net DLS
-              </Text>
+              <Text style={styles.cardTitle} numberOfLines={1}>Net DLS</Text>
               <Text
-                style={[
-                  styles.mainValue,
-                  styles.noWrap,
-                  netDLS >= 0 ? styles.positiveValue : styles.negativeValue,
-                ]}
-                numberOfLines={1}
+                style={[styles.mainValue, netDLS >= 0 ? styles.positiveValue : styles.negativeValue]}
+                adjustsFontSizeToFit minimumFontScale={0.6} numberOfLines={1}
               >
                 ₹{netDLS.toLocaleString('en-IN')}
               </Text>
-              <Text style={styles.netDLSSubtext} numberOfLines={1}>
-                DLS - Expenditure
-              </Text>
+              <Text style={styles.netDLSSubtext} numberOfLines={1}>DLS - Expenditure</Text>
             </View>
           </View>
 
-          {/* Monthly Performance Card */}
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Monthly Performance</Text>
             <View style={styles.metricsRowAligned}>
               <View style={styles.metricItem}>
-                <Text style={styles.metricLabel} numberOfLines={1}>
-                  Earnings
-                </Text>
-                <Text style={[styles.metricValue, styles.noWrap]} numberOfLines={1}>
+                <Text style={styles.metricLabel} numberOfLines={1}>Earnings</Text>
+                <Text style={styles.metricValue} adjustsFontSizeToFit minimumFontScale={0.6} numberOfLines={1}>
                   ₹{(stats?.total_earnings ?? 0).toLocaleString('en-IN')}
                 </Text>
               </View>
               <View style={styles.metricItem}>
-                <Text style={styles.metricLabel} numberOfLines={1}>
-                  Expenditure
-                </Text>
-                <Text style={[styles.metricValue, styles.noWrap]} numberOfLines={1}>
+                <Text style={styles.metricLabel} numberOfLines={1}>Expenditure</Text>
+                <Text style={styles.metricValue} adjustsFontSizeToFit minimumFontScale={0.6} numberOfLines={1}>
                   ₹{(stats?.total_expenditure ?? 0).toLocaleString('en-IN')}
                 </Text>
               </View>
               <View style={styles.metricItem}>
-                <Text style={styles.metricLabel} numberOfLines={1}>
-                  Net Profit
-                </Text>
+                <Text style={styles.metricLabel} numberOfLines={1}>Net Profit</Text>
                 <Text
-                  style={[
-                    styles.metricValue,
-                    styles.noWrap,
-                    (stats?.net_profit || 0) >= 0 ? styles.positiveValue : styles.negativeValue,
-                  ]}
-                  numberOfLines={1}
+                  style={[styles.metricValue, (stats?.net_profit || 0) >= 0 ? styles.positiveValue : styles.negativeValue]}
+                  adjustsFontSizeToFit minimumFontScale={0.6} numberOfLines={1}
                 >
                   ₹{(stats?.net_profit ?? 0).toLocaleString('en-IN')}
                 </Text>
@@ -500,39 +432,26 @@ export default function DashboardScreen() {
             </View>
           </View>
 
-          {/* Dairy Lock Sales Card */}
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Dairy Lock Sales</Text>
             <View style={styles.row}>
               <View style={styles.stat}>
-                <Text style={styles.statLabel} numberOfLines={1}>
-                  Total
-                </Text>
-                <Text style={[styles.dlsValue, styles.noWrap]} numberOfLines={1}>
+                <Text style={styles.statLabel} numberOfLines={1}>Total</Text>
+                <Text style={styles.dlsValue} adjustsFontSizeToFit minimumFontScale={0.6} numberOfLines={1}>
                   ₹{(stats?.total_dls ?? 0).toLocaleString('en-IN')}
                 </Text>
               </View>
               <View style={styles.stat}>
-                <Text style={styles.statLabel} numberOfLines={1}>
-                  This Month
-                </Text>
-                <Text style={[styles.dlsMonthValue, styles.noWrap]} numberOfLines={1}>
+                <Text style={styles.statLabel} numberOfLines={1}>This Month</Text>
+                <Text style={styles.dlsMonthValue} adjustsFontSizeToFit minimumFontScale={0.6} numberOfLines={1}>
                   ₹{currentMonthDLS.toLocaleString('en-IN')}
                 </Text>
               </View>
               <View style={styles.stat}>
-                <Text style={styles.statLabel} numberOfLines={1}>
-                  Monthly Profit
-                </Text>
+                <Text style={styles.statLabel} numberOfLines={1}>Monthly Profit</Text>
                 <Text
-                  style={[
-                    styles.dlsNetProfit,
-                    styles.noWrap,
-                    currentMonthDLS - (stats?.total_expenditure || 0) >= 0
-                      ? styles.positiveValue
-                      : styles.negativeValue,
-                  ]}
-                  numberOfLines={1}
+                  style={[styles.dlsNetProfit, currentMonthDLS - (stats?.total_expenditure || 0) >= 0 ? styles.positiveValue : styles.negativeValue]}
+                  adjustsFontSizeToFit minimumFontScale={0.6} numberOfLines={1}
                 >
                   ₹{(currentMonthDLS - (stats?.total_expenditure || 0)).toLocaleString('en-IN')}
                 </Text>
@@ -540,7 +459,6 @@ export default function DashboardScreen() {
             </View>
           </View>
 
-          {/* Event Calendar */}
           <View style={styles.card}>
             <View style={styles.calendarHeader}>
               <Text style={styles.cardTitle}>Event Calendar</Text>
@@ -571,7 +489,6 @@ export default function DashboardScreen() {
                 setEventModalVisible(true);
               }}
               onMonthChange={(month: any) => {
-                // Correctly update selectedMonth and selectedYear when month changes
                 setSelectedMonth(month.month);
                 setSelectedYear(month.year);
               }}
@@ -621,10 +538,9 @@ export default function DashboardScreen() {
           </View>
         </ScrollView>
 
-        {/* Event Add Modal */}
         <Modal visible={eventModalVisible} transparent animationType="slide">
           <View style={styles.modalOverlay}>
-            <View style={styles.eventModalContent}>
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.eventModalContent}>
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>Add Event</Text>
                 <TouchableOpacity onPress={() => setEventModalVisible(false)}>
@@ -632,55 +548,57 @@ export default function DashboardScreen() {
                 </TouchableOpacity>
               </View>
 
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Date: {selectedDate || 'Select a date'}</Text>
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Event Description ({eventDescription.length}/15)</Text>
-                <TextInput
-                  style={styles.input}
-                  value={eventDescription}
-                  onChangeText={(text) => setEventDescription(text.substring(0, 15))}
-                  placeholder="e.g., Deworming"
-                  maxLength={15}
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Reminder</Text>
-                <View style={styles.reminderOptions}>
-                  {['none', '15_days', '1_month', '3_months', '6_months', '1_year'].map((option) => (
-                    <TouchableOpacity
-                      key={option}
-                      style={[
-                        styles.reminderButton,
-                        reminder === option && styles.reminderButtonActive,
-                      ]}
-                      onPress={() => setReminder(option)}
-                    >
-                      <Text
-                        style={[
-                          styles.reminderButtonText,
-                          reminder === option && styles.reminderButtonTextActive,
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {option === 'none' ? 'None' : option.replace('_', ' ')}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+              <ScrollView>
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Date: {selectedDate || 'Select a date'}</Text>
                 </View>
-              </View>
 
-              {addingEvent ? (
-                <ActivityIndicator size="large" color="#10B981" style={{ marginTop: 20 }} />
-              ) : (
-                <TouchableOpacity onPress={handleAddEvent} style={styles.submitButton}>
-                  <Text style={styles.submitButtonText}>Add Event</Text>
-                </TouchableOpacity>
-              )}
-            </View>
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Event Description ({eventDescription.length}/15)</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={eventDescription}
+                    onChangeText={(text) => setEventDescription(text.substring(0, 15))}
+                    placeholder="e.g., Deworming"
+                    maxLength={15}
+                  />
+                </View>
+
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Reminder</Text>
+                  <View style={styles.reminderOptions}>
+                    {['none', '15_days', '1_month', '3_months', '6_months', '1_year'].map((option) => (
+                      <TouchableOpacity
+                        key={option}
+                        style={[
+                          styles.reminderButton,
+                          reminder === option && styles.reminderButtonActive,
+                        ]}
+                        onPress={() => setReminder(option)}
+                      >
+                        <Text
+                          style={[
+                            styles.reminderButtonText,
+                            reminder === option && styles.reminderButtonTextActive,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {option === 'none' ? 'None' : option.replace('_', ' ')}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                {addingEvent ? (
+                  <ActivityIndicator size="large" color="#10B981" style={{ marginTop: 20 }} />
+                ) : (
+                  <TouchableOpacity onPress={handleAddEvent} style={styles.submitButton}>
+                    <Text style={styles.submitButtonText}>Add Event</Text>
+                  </TouchableOpacity>
+                )}
+              </ScrollView>
+            </KeyboardAvoidingView>
           </View>
         </Modal>
       </View>
@@ -708,11 +626,11 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   greeting: {
-    fontSize: 13, // FEEDBACK #3
+    fontSize: 13,
     color: '#6B7280',
   },
   userName: {
-    fontSize: 22, // FEEDBACK #3: Reduced from 24
+    fontSize: 22,
     fontWeight: 'bold',
     color: '#1F2937',
   },
@@ -728,7 +646,6 @@ const styles = StyleSheet.create({
   logoutButton: {
     padding: 8,
   },
-  // FEEDBACK #2: Two column layout
   twoColumnRow: {
     flexDirection: 'row',
     gap: 12,
@@ -738,7 +655,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fff',
     borderRadius: 12,
-    padding: 16, // FEEDBACK #3: Reduced
+    padding: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -748,7 +665,7 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: '#fff',
     borderRadius: 12,
-    padding: 16, // FEEDBACK #3: Reduced
+    padding: 16,
     marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -757,17 +674,16 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   cardTitle: {
-    fontSize: 14, // FEEDBACK #3
+    fontSize: 14,
     fontWeight: '600',
     color: '#374151',
     marginBottom: 10,
   },
   mainValue: {
-    fontSize: 22, // FEEDBACK #3: Reduced
+    fontSize: 22,
     fontWeight: '700',
     color: '#10B981',
   },
-  // FEEDBACK #3: Prevent number wrapping
   noWrap: {
     flexShrink: 0,
   },
@@ -812,12 +728,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   statLabel: {
-    fontSize: 11, // FEEDBACK #3
+    fontSize: 11,
     color: '#6B7280',
     marginBottom: 4,
   },
   statValue: {
-    fontSize: 15, // FEEDBACK #3
+    fontSize: 15,
     fontWeight: '600',
     color: '#111827',
   },
@@ -838,22 +754,22 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   metricValue: {
-    fontSize: 15, // FEEDBACK #3
+    fontSize: 15,
     fontWeight: '600',
     color: '#1F2937',
   },
   dlsValue: {
-    fontSize: 16, // FEEDBACK #3
+    fontSize: 16,
     fontWeight: '600',
     color: '#10B981',
   },
   dlsMonthValue: {
-    fontSize: 16, // FEEDBACK #3
+    fontSize: 16,
     fontWeight: '600',
     color: '#3B82F6',
   },
   dlsNetProfit: {
-    fontSize: 16, // FEEDBACK #3
+    fontSize: 16,
     fontWeight: '600',
   },
   calendarHeader: {
@@ -866,7 +782,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   eventListTitle: {
-    fontSize: 13, // FEEDBACK #3
+    fontSize: 13,
     fontWeight: '600',
     color: '#374151',
     marginBottom: 12,
@@ -889,12 +805,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   eventDate: {
-    fontSize: 11, // FEEDBACK #3
+    fontSize: 11,
     color: '#6B7280',
     marginBottom: 2,
   },
   eventDesc: {
-    fontSize: 13, // FEEDBACK #3
+    fontSize: 13,
     color: '#1F2937',
     fontWeight: '500',
   },
@@ -914,7 +830,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
-    maxHeight: '70%',
+    maxHeight: '85%',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -923,7 +839,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   modalTitle: {
-    fontSize: 18, // FEEDBACK #3
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#1F2937',
   },
@@ -931,7 +847,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   label: {
-    fontSize: 13, // FEEDBACK #3
+    fontSize: 13,
     fontWeight: '600',
     color: '#374151',
     marginBottom: 8,
@@ -943,7 +859,7 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
     paddingVertical: 12,
     paddingHorizontal: 16,
-    fontSize: 15, // FEEDBACK #3
+    fontSize: 15,
     color: '#1F2937',
   },
   reminderOptions: {
@@ -964,7 +880,7 @@ const styles = StyleSheet.create({
     borderColor: '#10B981',
   },
   reminderButtonText: {
-    fontSize: 11, // FEEDBACK #3
+    fontSize: 11,
     color: '#374151',
   },
   reminderButtonTextActive: {
@@ -983,10 +899,10 @@ const styles = StyleSheet.create({
   },
   submitButtonText: {
     color: '#fff',
-    fontSize: 15, // FEEDBACK #3
+    fontSize: 15,
     fontWeight: '600',
   },
-  filterCard: { // Added for the filter section
+  filterCard: {
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: 16,
@@ -997,27 +913,27 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  filterLabel: { // Added for the filter label
+  filterLabel: {
     fontSize: 14,
     fontWeight: '600',
     color: '#374151',
     marginBottom: 10,
   },
-  pickerRow: { // Added for the picker row
+  pickerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: 10,
   },
-  pickerWrapper: { // Added for individual picker wrapper
+  pickerWrapper: {
     flex: 1,
     borderWidth: 1,
     borderColor: '#E5E7EB',
     borderRadius: 8,
     backgroundColor: '#F9FAFB',
-    justifyContent: 'center', // Center content vertically
+    justifyContent: 'center',
   },
-  picker: { // Added for the Picker component style
-    height: 40, // Adjust height as needed
+  picker: {
+    height: 40,
     width: '100%',
   },
 });
