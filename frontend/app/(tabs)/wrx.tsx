@@ -21,7 +21,7 @@ import { format } from 'date-fns';
 
 // FEEDBACK #9: Added background image
 const BACKGROUND_IMAGE = require('../../assets/images/0vjmy7gj_1000044672.jpg');
-const BACKEND_URL = "https://wazir-dairy-farm.onrender.com";
+const BACKEND_URL = "https://wazir-dairy-farm-1.onrender.com";
 
 const QUICK_REACTIONS = [
   { emoji: '👍', label: 'Okay' },
