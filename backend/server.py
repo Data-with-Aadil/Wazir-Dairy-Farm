@@ -237,7 +237,7 @@ async def update_push_token(data: UpdatePushToken):
         {"name": data.name},
         {"$set": {"expo_push_token": data.expo_push_token}}
     )
-    logging.info(f"Updated push token for {data.name}")
+    logging.info(f"✅ Updated push token for {data.name}")
     return {"success": True}
 
 # ==================== INVESTMENT ENDPOINTS ====================
@@ -661,7 +661,8 @@ async def get_dashboard_stats(month: Optional[int] = None, year: Optional[int] =
         milk_docs = await db.milk_sales.find(date_filter).to_list(1000)
         total_earn = sum(float(d.get("earnings", 0)) for d in milk_docs)
 
-        dls_docs = await db.dls.find(date_filter).to_list(1000)
+        # 🚨 FIX: Changed 'db.dls' to 'db.dairy_lock_sales' so that your dashboard gets the real data!
+        dls_docs = await db.dairy_lock_sales.find(date_filter).to_list(1000)
         total_dls = sum(float(d.get("amount", 0)) for d in dls_docs)
 
         inv_docs = await db.investments.find({"deleted": {"$ne": True}}).to_list(1000)
