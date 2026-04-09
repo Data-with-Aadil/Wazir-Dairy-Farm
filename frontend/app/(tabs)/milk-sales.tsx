@@ -23,6 +23,19 @@ import { useFocusEffect } from 'expo-router';
 const BACKGROUND_IMAGE = require('../../assets/images/0vjmy7gj_1000044672.jpg');
 const BACKEND_URL = "https://wazir-dairy-farm-1.onrender.com";
 
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const YEARS = [2024, 2025, 2026, 2027];
+
+// ✅ Bulletproof Date Parser (Fixes Web Timezone/0 data bugs)
+const parseDateString = (dateStr: string) => {
+  if (!dateStr) return { month: 0, year: 0 };
+  const parts = dateStr.split('-');
+  if (parts.length >= 2) {
+    return { year: parseInt(parts[0], 10), month: parseInt(parts[1], 10) };
+  }
+  return { month: 0, year: 0 };
+};
+
 interface MilkSale {
   _id: string;
   date: string;
@@ -45,8 +58,9 @@ export default function MilkSalesScreen() {
   const [editingId, setEditingId] = useState<string | null>(null);
 
   // ✅ Filters State (Default is Current Month)
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const currentDate = new Date();
+  const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
 
   const [date, setDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -82,22 +96,18 @@ export default function MilkSalesScreen() {
     setRefreshing(false);
   };
 
-  // ✅ Filter Logic (Includes 'All Time' check)
+  // ✅ Bulletproof Filter Logic
   const filteredSales = useMemo(() => {
     return sales.filter((s) => {
-      const parts = s.date.split('-');
-      if (parts.length < 2) return false;
-      const saleYear = parseInt(parts[0], 10);
-      const saleMonth = parseInt(parts[1], 10);
-
+      const { month, year } = parseDateString(s.date);
       if (selectedMonth === 0) {
-        return saleYear === selectedYear; // All Time for selected year
+        return year === selectedYear; // All Time for selected year
       }
-      return saleMonth === selectedMonth && saleYear === selectedYear;
-    });
+      return month === selectedMonth && year === selectedYear;
+    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [sales, selectedMonth, selectedYear]);
 
-  // ✅ Stats Logic for Summary Card (Rounded Volume)
+  // ✅ Stats Logic for Summary Card
   const stats = useMemo(() => {
     const totalVolume = filteredSales.reduce((sum, s) => sum + Number(s.volume), 0);
     const totalEarnings = filteredSales.reduce((sum, s) => sum + Number(s.earnings), 0);
@@ -105,7 +115,7 @@ export default function MilkSalesScreen() {
       ? (filteredSales.reduce((sum, s) => sum + Number(s.fat_percentage), 0) / filteredSales.length).toFixed(1) 
       : 0;
     return { 
-      totalVolume: totalVolume.toFixed(2), // Round to 2 decimals
+      totalVolume: totalVolume.toFixed(2), 
       totalEarnings, 
       avgFat 
     };
@@ -279,37 +289,37 @@ export default function MilkSalesScreen() {
           ref={scrollViewRef}
           style={styles.content}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-          stickyHeaderIndices={[0]} // ✅ Makes the Summary Card sticky
+          stickyHeaderIndices={[0]} 
         >
-          {/* Sticky Container */}
+          {/* ✅ Sticky Container */}
           <View style={styles.stickyContainer}>
-            <View style={styles.summaryCard}>
-              {/* Internal Filter Row */}
-              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 15 }}>
-                <View style={styles.pickerContainer}>
-                  <Picker 
-                    selectedValue={selectedMonth} 
-                    onValueChange={setSelectedMonth} 
-                    style={styles.picker}
-                  >
-                    <Picker.Item label="All Time (Year)" value={0} color="#374151" />
-                    {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-                      .map((m, i) => <Picker.Item key={m} label={m} value={i + 1} color="#374151" />)}
-                  </Picker>
-                </View>
-                <View style={styles.pickerContainer}>
-                  <Picker 
-                    selectedValue={selectedYear} 
-                    onValueChange={setSelectedYear} 
-                    style={styles.picker}
-                  >
-                    {[2024, 2025, 2026, 2027].map(y => <Picker.Item key={y} label={y.toString()} value={y} color="#374151" />)}
-                  </Picker>
-                </View>
+            {/* ✅ Filter Row (Moved OUTSIDE Summary Card) */}
+            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
+              <View style={styles.filterPickerContainer}>
+                <Picker 
+                  selectedValue={selectedMonth} 
+                  onValueChange={setSelectedMonth} 
+                  style={styles.picker}
+                >
+                  <Picker.Item label="All Time (Year)" value={0} color="#374151" />
+                  {MONTHS.map((m, i) => <Picker.Item key={m} label={m} value={i + 1} color="#374151" />)}
+                </Picker>
               </View>
+              <View style={styles.filterPickerContainer}>
+                <Picker 
+                  selectedValue={selectedYear} 
+                  onValueChange={setSelectedYear} 
+                  style={styles.picker}
+                >
+                  {YEARS.map(y => <Picker.Item key={y} label={y.toString()} value={y} color="#374151" />)}
+                </Picker>
+              </View>
+            </View>
 
+            {/* Summary Card */}
+            <View style={styles.summaryCard}>
               <Text style={styles.summaryLabel}>
-                Total Sales ({selectedMonth === 0 ? selectedYear : `${selectedMonth}/${selectedYear}`})
+                Total Sales ({selectedMonth === 0 ? selectedYear : `${MONTHS[selectedMonth - 1]}/${selectedYear}`})
               </Text>
               <Text style={styles.grandTotal} adjustsFontSizeToFit minimumFontScale={0.8} numberOfLines={1}>
                 ₹{stats.totalEarnings.toLocaleString('en-IN')}
@@ -374,7 +384,6 @@ export default function MilkSalesScreen() {
 
         <Modal visible={modalVisible} transparent animationType="slide">
           <View style={styles.modalOverlay}>
-            {/* ✅ Fix: Keyboard vertical offset and proper behavior */}
             <KeyboardAvoidingView 
               behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
               style={styles.modalContent}
@@ -503,13 +512,14 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    padding: 16,
+    paddingHorizontal: 16,
   },
   stickyContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.92)', // Keeps background solid behind sticky header
+    backgroundColor: 'rgba(255, 255, 255, 0.92)', // Hides scrolling content underneath
     paddingBottom: 10,
+    paddingTop: 8,
   },
-  pickerContainer: {
+  filterPickerContainer: {
     flex: 1,
     backgroundColor: '#fff',
     borderRadius: 10,
