@@ -253,7 +253,7 @@ export default function DashboardScreen() {
     }
   };
 
-  // ✅ Fix Point 10: Logout fix (Hard route replace)
+  // ✅ Fix Point 10: Clean Logout (Routing is now handled by AuthContext)
   const handleLogout = () => {
     Alert.alert('Logout', 'Are you sure you want to logout?', [
       { text: 'Cancel', style: 'cancel' },
@@ -261,10 +261,7 @@ export default function DashboardScreen() {
         text: 'Logout',
         style: 'destructive',
         onPress: async () => {
-          await logout();
-          setTimeout(() => {
-            router.replace('/');
-          }, 100);
+          await logout(); // बस! बाकी सारा काम AuthContext खुद कर लेगा।
         },
       },
     ]);
