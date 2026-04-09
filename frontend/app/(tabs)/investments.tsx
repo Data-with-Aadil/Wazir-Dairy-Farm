@@ -304,7 +304,7 @@ export default function InvestmentsScreen() {
               <View style={styles.pickerContainerOuter}>
                 <Picker 
                   selectedValue={selectedMonth} 
-                  onValueChange={setSelectedMonth} 
+                  onValueChange={(val) => setSelectedMonth(Number(val))} 
                   style={styles.picker}
                 >
                   <Picker.Item label="All Time" value={0} color="#374151" />
@@ -315,7 +315,7 @@ export default function InvestmentsScreen() {
               <View style={styles.pickerContainerOuter}>
                 <Picker 
                   selectedValue={selectedYear} 
-                  onValueChange={setSelectedYear} 
+                  onValueChange={(val) => setSelectedYear(Number(val))} 
                   style={styles.picker}
                 >
                   <Picker.Item label="All Time" value={0} color="#374151" />
