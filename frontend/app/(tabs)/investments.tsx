@@ -52,8 +52,9 @@ export default function InvestmentsScreen() {
   const [editMode, setEditMode] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
+  // ✅ Filters State (Default is 0, 0 which means 'All Time')
   const [selectedMonth, setSelectedMonth] = useState(0); 
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [selectedYear, setSelectedYear] = useState(0);
 
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(new Date()); 
@@ -90,17 +91,24 @@ export default function InvestmentsScreen() {
     setRefreshing(false);
   };
 
+  // ✅ Filter Logic (Syncs with History Cards and supports 'All Time')
   const filteredInvestments = useMemo(() => {
     return investments.filter((inv) => {
-      if (selectedMonth === 0) {
-        const d = new Date(inv.date);
-        return d.getFullYear() === selectedYear;
-      }
       const d = new Date(inv.date);
-      return (d.getMonth() + 1) === selectedMonth && d.getFullYear() === selectedYear;
-    });
+      const invMonth = d.getMonth() + 1;
+      const invYear = d.getFullYear();
+
+      if (selectedYear === 0) {
+        return true; // "All Time" selected for year
+      }
+      if (selectedMonth === 0) {
+        return invYear === selectedYear; // "All Time" in a specific year
+      }
+      return invMonth === selectedMonth && invYear === selectedYear;
+    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [investments, selectedMonth, selectedYear]);
 
+  // ✅ Stats Logic for Summary Card
   const stats = useMemo(() => {
     const totalAmount = filteredInvestments.reduce((sum, inv) => sum + Number(inv.amount), 0);
     const aadilAmount = filteredInvestments.filter(i => i.investor === 'Aadil').reduce((sum, inv) => sum + Number(inv.amount), 0);
@@ -227,7 +235,6 @@ export default function InvestmentsScreen() {
               { method: 'DELETE' }
             );
             if (response.ok) {
-              Alert.alert('Deleted', 'Investment deleted successfully');
               fetchInvestments();
             } else {
               const data = await response.json();
@@ -256,6 +263,13 @@ export default function InvestmentsScreen() {
     resetForm();
   };
 
+  // Helper to determine summary title
+  const getSummaryLabel = () => {
+    if (selectedYear === 0) return 'Total Investments (All Time)';
+    if (selectedMonth === 0) return `Total Investments in ${selectedYear}`;
+    return `Investments in ${selectedMonth}/${selectedYear}`;
+  };
+
   return (
     <ImageBackground source={BACKGROUND_IMAGE} style={styles.background} resizeMode="cover">
       <View style={styles.overlay}>
@@ -267,48 +281,59 @@ export default function InvestmentsScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* List with Sticky Header */}
         <ScrollView
           ref={scrollViewRef}
           style={styles.content}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          stickyHeaderIndices={[0]} // ✅ Makes the filter and summary card sticky
         >
-          {/* ✅ Filter Row */}
-          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 15 }}>
-            <View style={styles.pickerContainerOuter}>
-              <Picker selectedValue={selectedMonth} onValueChange={setSelectedMonth} style={styles.picker}>
-                <Picker.Item label="All Time" value={0} />
-                {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-                  .map((m, i) => <Picker.Item key={m} label={m} value={i + 1} />)}
-              </Picker>
-            </View>
-            <View style={styles.pickerContainerOuter}>
-              <Picker selectedValue={selectedYear} onValueChange={setSelectedYear} style={styles.picker}>
-                {[2024, 2025, 2026, 2027].map(y => <Picker.Item key={y} label={y.toString()} value={y} />)}
-              </Picker>
-            </View>
-          </View>
-
-          {/* ✅ Summary Card */}
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryLabel}>
-              {selectedMonth === 0 ? `Total Investments in ${selectedYear}` : `Investments in ${selectedMonth}/${selectedYear}`}
-            </Text>
-            <Text style={styles.grandTotal} adjustsFontSizeToFit minimumFontScale={0.8} numberOfLines={1}>
-              ₹{stats.totalAmount.toLocaleString('en-IN')}
-            </Text>
-            <View style={styles.splitRow}>
-              <View>
-                <Text style={styles.splitLabel}>Aadil</Text>
-                <Text style={styles.splitValue} adjustsFontSizeToFit minimumFontScale={0.8} numberOfLines={1}>
-                  ₹{stats.aadilAmount.toLocaleString('en-IN')}
-                </Text>
+          {/* ✅ Sticky Container */}
+          <View style={styles.stickyContainer}>
+            <View style={styles.summaryCard}>
+              {/* ✅ Filter Row (Inside Summary Card) */}
+              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 15 }}>
+                <View style={styles.pickerContainerOuter}>
+                  <Picker 
+                    selectedValue={selectedMonth} 
+                    onValueChange={setSelectedMonth} 
+                    style={styles.picker}
+                  >
+                    <Picker.Item label="All Time" value={0} color="#374151" />
+                    {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+                      .map((m, i) => <Picker.Item key={m} label={m} value={i + 1} color="#374151" />)}
+                  </Picker>
+                </View>
+                <View style={styles.pickerContainerOuter}>
+                  <Picker 
+                    selectedValue={selectedYear} 
+                    onValueChange={setSelectedYear} 
+                    style={styles.picker}
+                  >
+                    <Picker.Item label="All Time" value={0} color="#374151" />
+                    {[2024, 2025, 2026, 2027].map(y => <Picker.Item key={y} label={y.toString()} value={y} color="#374151" />)}
+                  </Picker>
+                </View>
               </View>
-              <View style={styles.splitDivider} />
-              <View>
-                <Text style={styles.splitLabel}>Imran</Text>
-                <Text style={styles.splitValue} adjustsFontSizeToFit minimumFontScale={0.8} numberOfLines={1}>
-                  ₹{stats.imranAmount.toLocaleString('en-IN')}
-                </Text>
+
+              <Text style={styles.summaryLabel}>{getSummaryLabel()}</Text>
+              <Text style={styles.grandTotal} adjustsFontSizeToFit minimumFontScale={0.8} numberOfLines={1}>
+                ₹{stats.totalAmount.toLocaleString('en-IN')}
+              </Text>
+              <View style={styles.splitRow}>
+                <View>
+                  <Text style={styles.splitLabel}>Aadil</Text>
+                  <Text style={styles.splitValue} adjustsFontSizeToFit minimumFontScale={0.8} numberOfLines={1}>
+                    ₹{stats.aadilAmount.toLocaleString('en-IN')}
+                  </Text>
+                </View>
+                <View style={styles.splitDivider} />
+                <View>
+                  <Text style={styles.splitLabel}>Imran</Text>
+                  <Text style={styles.splitValue} adjustsFontSizeToFit minimumFontScale={0.8} numberOfLines={1}>
+                    ₹{stats.imranAmount.toLocaleString('en-IN')}
+                  </Text>
+                </View>
               </View>
             </View>
           </View>
@@ -353,7 +378,12 @@ export default function InvestmentsScreen() {
           onRequestClose={closeModal}
         >
           <View style={styles.modalOverlay}>
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalContent}>
+            {/* ✅ Fix Point 9: Keyboard offset added */}
+            <KeyboardAvoidingView 
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+              style={styles.modalContent}
+              keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 20}
+            >
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle} adjustsFontSizeToFit minimumFontScale={0.8} numberOfLines={1}>
                   {editMode ? 'Edit Investment' : 'Add Investment'}
@@ -371,6 +401,7 @@ export default function InvestmentsScreen() {
                     value={amount}
                     onChangeText={setAmount}
                     placeholder="0"
+                    placeholderTextColor="#9CA3AF"
                     keyboardType="numeric"
                   />
                 </View>
@@ -390,8 +421,8 @@ export default function InvestmentsScreen() {
                   <Text style={styles.label}>Investor</Text>
                   <View style={styles.pickerContainerInner}>
                     <Picker selectedValue={investor} onValueChange={(value) => setInvestor(value)} style={styles.picker}>
-                      <Picker.Item label="Aadil" value="Aadil" />
-                      <Picker.Item label="Imran" value="Imran" />
+                      <Picker.Item label="Aadil" value="Aadil" color="#374151" />
+                      <Picker.Item label="Imran" value="Imran" color="#374151" />
                     </Picker>
                   </View>
                 </View>
@@ -401,7 +432,7 @@ export default function InvestmentsScreen() {
                   <View style={styles.pickerContainerInner}>
                     <Picker selectedValue={category} onValueChange={(value) => setCategory(value)} style={styles.picker}>
                       {CATEGORIES.map((cat) => (
-                        <Picker.Item key={cat} label={cat} value={cat} />
+                        <Picker.Item key={cat} label={cat} value={cat} color="#374151" />
                       ))}
                     </Picker>
                   </View>
@@ -414,6 +445,7 @@ export default function InvestmentsScreen() {
                     value={notes}
                     onChangeText={setNotes}
                     placeholder="Optional notes"
+                    placeholderTextColor="#9CA3AF"
                     multiline
                     textAlignVertical="top"
                   />
@@ -447,18 +479,19 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 56, paddingBottom: 16, backgroundColor: 'rgba(255, 255, 255, 0.95)', borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
   title: { fontSize: 24, fontWeight: 'bold', color: '#1F2937' },
   addButton: { backgroundColor: '#10B981', width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
-  content: { flex: 1, padding: 16 },
-  pickerContainerOuter: { flex: 1, backgroundColor: '#fff', borderRadius: 10, height: 45, justifyContent: 'center', borderWidth: 1, borderColor: '#E5E7EB' },
+  content: { flex: 1, paddingHorizontal: 16 },
+  stickyContainer: { backgroundColor: 'rgba(255, 255, 255, 0.92)', paddingBottom: 10, paddingTop: 8 },
+  pickerContainerOuter: { flex: 1, backgroundColor: '#fff', borderRadius: 10, height: 40, justifyContent: 'center', borderWidth: 1, borderColor: '#E5E7EB' },
   pickerContainerInner: { backgroundColor: '#F9FAFB', borderRadius: 8, borderWidth: 1, borderColor: '#E5E7EB', overflow: 'hidden' },
-  picker: { height: 45 },
-  summaryCard: { backgroundColor: '#1F2937', borderRadius: 15, padding: 20, marginBottom: 20 },
+  picker: { height: 40, color: '#374151' },
+  summaryCard: { backgroundColor: '#1F2937', borderRadius: 15, padding: 20 },
   summaryLabel: { color: '#9CA3AF', fontSize: 12 },
   grandTotal: { color: '#fff', fontSize: 28, fontWeight: 'bold', marginTop: 4 },
   splitRow: { flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: '#374151', paddingTop: 15, marginTop: 10 },
   splitLabel: { color: '#9CA3AF', fontSize: 11 },
   splitValue: { color: '#fff', fontSize: 16, fontWeight: 'bold', flexShrink: 1 },
   splitDivider: { width: 1, backgroundColor: '#374151', height: '100%' },
-  emptyState: { alignItems: 'center', justifyContent: 'center', paddingTop: 100 },
+  emptyState: { alignItems: 'center', justifyContent: 'center', paddingTop: 80 },
   emptyText: { fontSize: 18, fontWeight: '600', color: '#6B7280', marginTop: 16 },
   emptySubtext: { fontSize: 14, color: '#9CA3AF', marginTop: 8 },
   card: { backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: 12, padding: 16, marginBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 },
@@ -476,7 +509,7 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#1F2937' },
   formGroup: { marginBottom: 16 },
   label: { fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8 },
-  input: { backgroundColor: '#F9FAFB', borderRadius: 8, borderWidth: 1, borderColor: '#E5E7EB', paddingVertical: 12, paddingHorizontal: 16, fontSize: 16, color: '#1F2937' },
+  input: { backgroundColor: '#F9FAFB', borderRadius: 8, borderWidth: 1, borderColor: '#E5E7EB', paddingVertical: 12, paddingHorizontal: 16, fontSize: 16, color: '#374151' },
   dateButton: { backgroundColor: '#F9FAFB', borderRadius: 8, borderWidth: 1, borderColor: '#E5E7EB', paddingVertical: 12, paddingHorizontal: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   dateButtonText: { fontSize: 16, color: '#1F2937' },
   submitButton: { backgroundColor: '#10B981', borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 8, marginBottom: 20 },
