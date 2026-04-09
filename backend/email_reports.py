@@ -10,7 +10,7 @@ import pytz
 
 # Resend Configuration
 RESEND_API_KEY = "re_XLQhuZYC_NCb1czT5b5mwSZArxCEgzdBw"
-RECIPIENT_EMAILS = ["aadi208888@gmail.com", "aadilmansoori111@gmail.com", "mansuri.imran777@gmail.com"]
+RECIPIENT_EMAILS = ["aadi208888@gmail.com", "aadilmansoori111@gmail.com", "mansuri.imran777@gmail.com","yakub.mansoori@gmail.com"]
 SENDER_EMAIL = "onboarding@resend.dev"
 
 # Timezone Configuration
