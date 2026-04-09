@@ -25,6 +25,7 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.wazirdairyfarm.app",
+      "googleServicesFile": "./google-services.json",
       "permissions": [
         "NOTIFICATIONS",
         "POST_NOTIFICATIONS",
