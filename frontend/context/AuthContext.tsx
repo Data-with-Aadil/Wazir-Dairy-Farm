@@ -123,10 +123,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const registerForPushNotifications = async () => {
-    alert("Step 1: Push Setup Started! 🚀"); // <-- Track 1
-    
     if (!Device.isDevice) {
-      alert("❌ Error: Phone ko Emulator/Web samajh raha hai");
+      console.log("Must use physical device for Push Notifications");
       return;
     }
     
@@ -141,24 +139,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       
       if (finalStatus !== 'granted') {
-        alert("❌ Error: Permission Denied");
+        console.log("Push Notification Permission Denied");
         return;
       }
       
       const projectId = Constants?.expoConfig?.extra?.eas?.projectId ?? Constants?.easConfig?.projectId ?? "1b758208-fbd5-44ae-a860-d75e4cce3809";
       
       const token = await Notifications.getExpoPushTokenAsync({ projectId });
-      alert("Step 2: ✅ Token Generate Ho Gaya!"); // <-- Track 2
+      console.log("✅ Token Generated Successfully");
       
       setExpoPushToken(token.data);
     } catch (error) {
-      alert("⚠️ Step 2 Failed (Token Error):\n" + String(error));
+      console.error("⚠️ Token Error:", error);
     }
   };
 
   const sendTokenToBackend = async (userName: string, token: string) => {
-    alert(`Step 3: Sending Token for ${userName}... 📡`); // <-- Track 3
-    
     try {
       const response = await fetch(`${BACKEND_URL}/api/auth/update-push-token`, {
         method: 'POST',
@@ -167,12 +163,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (response.ok) {
-        alert("Step 4: ✅ Token Backend me SAVE ho gaya! 🎉"); // <-- Track 4 (Final Success)
+        console.log("✅ Token Backend me SAVE ho gaya!");
       } else {
-        alert(`❌ Step 4 Failed: Backend Error ${response.status}`);
+        console.error(`❌ Backend Error ${response.status}`);
       }
     } catch (error) {
-      alert("❌ Step 4 Failed (Network Error):\n" + String(error));
+      console.error("❌ Network Error while sending token:", error);
     }
   };
 
@@ -213,9 +209,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = async () => {
-    await AsyncStorage.removeItem('user');
-    setUser(null);
-    router.replace('/'); 
+    try {
+      await AsyncStorage.removeItem('user');
+      setUser(null);
+      // ✅ FIX 10: Added setTimeout to ensure routing works after state updates
+      setTimeout(() => {
+        router.replace('/');
+      }, 100);
+    } catch (error) {
+      console.error("Logout error:", error);
+    }
   };
 
   const queueOperation = async (operation: any) => {
