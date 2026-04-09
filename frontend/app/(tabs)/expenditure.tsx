@@ -276,26 +276,41 @@ export default function ExpenditureScreen() {
     }
   };
 
-  // ✅ Fix Point 5: Download Bill Error using Cache Directory
+  // ✅ Fix Point 5: Cross-Platform (Web + Mobile) Bill Download
   const handleDownloadBill = async (bill: Bill) => {
     try {
       const sanitizedDesc = bill.description.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 20);
       const fileName = `bill_${sanitizedDesc}_${Date.now()}.jpg`;
-      const fileUri = FileSystem.cacheDirectory + fileName; // Cache directory is much safer for sharing
 
-      const base64Data = bill.image.replace(/^data:image\/\w+;base64,/, '');
+      // 🌐 WEB LOGIC
+      if (Platform.OS === 'web') {
+        // Web browser requires an HTML anchor tag click to download files
+        const link = document.createElement('a');
+        link.href = bill.image; // bill.image is already a base64 data URI
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        // Using window.alert for web just to be safe
+        window.alert('✅ Bill downloaded successfully!');
+      } 
+      // 📱 MOBILE LOGIC (Android / iOS)
+      else {
+        const fileUri = FileSystem.cacheDirectory + fileName;
+        const base64Data = bill.image.replace(/^data:image\/\w+;base64,/, '');
 
-      await FileSystem.writeAsStringAsync(fileUri, base64Data, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(fileUri, {
-          mimeType: 'image/jpeg',
-          dialogTitle: 'Download Bill',
+        await FileSystem.writeAsStringAsync(fileUri, base64Data, {
+          encoding: FileSystem.EncodingType.Base64,
         });
-      } else {
-        Alert.alert('Success', `Bill saved to device`);
+
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(fileUri, {
+            mimeType: 'image/jpeg',
+            dialogTitle: 'Download Bill',
+          });
+        } else {
+          Alert.alert('Success', 'Bill saved to device');
+        }
       }
     } catch (error) {
       console.error('Download error:', error);
