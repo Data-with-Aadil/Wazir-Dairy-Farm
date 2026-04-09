@@ -123,10 +123,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const registerForPushNotifications = async () => {
+    alert("Step 1: Push Setup Started! 🚀"); // <-- Track 1
+    
     if (!Device.isDevice) {
-      console.log('Must use physical device for Push Notifications');
+      alert("❌ Error: Phone ko Emulator/Web samajh raha hai");
       return;
     }
+    
     try {
       const Notifications = await import('expo-notifications');
       const { status: existingStatus } = await Notifications.getPermissionsAsync();
@@ -138,36 +141,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       
       if (finalStatus !== 'granted') {
-        alert("❌ Permission Denied by User");
+        alert("❌ Error: Permission Denied");
         return;
       }
       
       const projectId = Constants?.expoConfig?.extra?.eas?.projectId ?? Constants?.easConfig?.projectId ?? "1b758208-fbd5-44ae-a860-d75e4cce3809";
       
-      // 1. Token fetch karo
       const token = await Notifications.getExpoPushTokenAsync({ projectId });
+      alert("Step 2: ✅ Token Generate Ho Gaya!"); // <-- Track 2
       
-      // 2. Screen par popup dikhao
-      alert("✅ Token Mil Gaya!\n" + token.data.substring(0, 20) + "...");
-      
-      // 3. State update karo (Yahi backend ko token bhejega)
       setExpoPushToken(token.data);
-      
     } catch (error) {
-      alert("⚠️ Token Error:\n" + String(error));
-      console.error('Push token error:', error);
+      alert("⚠️ Step 2 Failed (Token Error):\n" + String(error));
     }
   };
 
   const sendTokenToBackend = async (userName: string, token: string) => {
+    alert(`Step 3: Sending Token for ${userName}... 📡`); // <-- Track 3
+    
     try {
-      await fetch(`${BACKEND_URL}/api/auth/update-push-token`, {
+      const response = await fetch(`${BACKEND_URL}/api/auth/update-push-token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: userName, expo_push_token: token }),
       });
+
+      if (response.ok) {
+        alert("Step 4: ✅ Token Backend me SAVE ho gaya! 🎉"); // <-- Track 4 (Final Success)
+      } else {
+        alert(`❌ Step 4 Failed: Backend Error ${response.status}`);
+      }
     } catch (error) {
-      console.error('Error sending token to backend:', error);
+      alert("❌ Step 4 Failed (Network Error):\n" + String(error));
     }
   };
 
