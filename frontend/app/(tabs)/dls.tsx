@@ -268,21 +268,21 @@ export default function DLSScreen() {
         >
           {/* Sticky Container */}
           <View style={styles.stickyContainer}>
-            <View style={styles.summaryCard}>
-              {/* ✅ Internal Filter Row */}
-              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 15 }}>
-                <View style={styles.pickerContainer}>
-                  <Picker 
-                    selectedValue={selectedYear} 
-                    onValueChange={(val) => setSelectedYear(Number(val))} 
-                    style={styles.picker}
-                  >
-                    <Picker.Item label="All Time" value={0} color="#374151" />
-                    {[2024, 2025, 2026, 2027].map(y => <Picker.Item key={y} label={`Year: ${y}`} value={y} color="#374151" />)}
-                  </Picker>
-                </View>
+            {/* ✅ Filter Row (Moved OUTSIDE Summary Card) */}
+            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
+              <View style={styles.pickerContainer}>
+                <Picker 
+                  selectedValue={selectedYear} 
+                  onValueChange={(val) => setSelectedYear(Number(val))} 
+                  style={styles.picker}
+                >
+                  <Picker.Item label="All Time" value={0} color="#374151" />
+                  {[2024, 2025, 2026, 2027].map(y => <Picker.Item key={y} label={`Year: ${y}`} value={y} color="#374151" />)}
+                </Picker>
               </View>
+            </View>
 
+            <View style={styles.summaryCard}>
               <Text style={styles.summaryLabel}>
                 {selectedYear === 0 ? 'Total Received (All Time)' : `Total Received in ${selectedYear}`}
               </Text>
@@ -331,7 +331,6 @@ export default function DLSScreen() {
 
         <Modal visible={modalVisible} transparent animationType="slide">
           <View style={styles.modalOverlay}>
-            {/* ✅ Fix: KeyboardAvoidingView vertical offset for iOS/Android */}
             <KeyboardAvoidingView 
               behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
               style={styles.modalContent}
@@ -346,7 +345,7 @@ export default function DLSScreen() {
                 </TouchableOpacity>
               </View>
 
-              <ScrollView showsVerticalScrollIndicator={false}>
+              <ScrollView>
                 <View style={styles.formGroup}>
                   <Text style={styles.label}>Month</Text>
                   <View style={styles.pickerContainerInner}>
@@ -480,7 +479,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   stickyContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    backgroundColor: 'rgba(255, 255, 255, 0.92)', 
     paddingBottom: 10,
     paddingTop: 8,
   },
@@ -488,7 +487,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fff',
     borderRadius: 10,
-    height: 45,
+    height: 40,
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: '#E5E7EB',
@@ -501,7 +500,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   picker: {
-    height: 45,
+    height: 40,
     color: '#374151',
   },
   summaryCard: {
@@ -522,7 +521,7 @@ const styles = StyleSheet.create({
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: 100,
+    paddingTop: 80,
   },
   emptyText: {
     fontSize: 16,
@@ -645,7 +644,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     fontSize: 15,
-    color: '#374151', // ✅ Set to dark grey
+    color: '#374151', 
   },
   dateButton: {
     backgroundColor: '#F9FAFB',
@@ -668,7 +667,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: 'center',
     marginTop: 8,
-    marginBottom: 20, // Give some padding at bottom for scrolling
+    marginBottom: 20, 
   },
   submitButtonText: {
     color: '#fff',
