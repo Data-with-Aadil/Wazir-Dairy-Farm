@@ -39,7 +39,7 @@ async def send_push_notification(from_user: str, title: str, body: str, data: Di
         other_user = "Imran" if from_user == "Aadil" else "Aadil"
         user_doc = await db.users.find_one({"name": other_user})
         
-        if not user_doc or "expo_push_token" not in user_doc:
+        if not user_doc or not user_doc.get("expo_push_token"):
             logging.warning(f"⚠️ No push token found for {other_user}")
             return
 
