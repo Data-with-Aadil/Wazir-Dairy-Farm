@@ -32,6 +32,16 @@ const CATEGORIES = [
   'Others',
 ];
 
+// ✅ Bulletproof Date Parser (Fixes Web Timezone/0 data bugs)
+const parseDateString = (dateStr: string) => {
+  if (!dateStr) return { month: 0, year: 0 };
+  const parts = dateStr.split('-');
+  if (parts.length >= 2) {
+    return { year: parseInt(parts[0], 10), month: parseInt(parts[1], 10) };
+  }
+  return { month: 0, year: 0 };
+};
+
 interface Investment {
   _id: string;
   amount: number;
@@ -94,17 +104,15 @@ export default function InvestmentsScreen() {
   // ✅ Filter Logic (Syncs with History Cards and supports 'All Time')
   const filteredInvestments = useMemo(() => {
     return investments.filter((inv) => {
-      const d = new Date(inv.date);
-      const invMonth = d.getMonth() + 1;
-      const invYear = d.getFullYear();
+      const { month, year } = parseDateString(inv.date);
 
       if (selectedYear === 0) {
         return true; // "All Time" selected for year
       }
       if (selectedMonth === 0) {
-        return invYear === selectedYear; // "All Time" in a specific year
+        return year === selectedYear; // "All Time" in a specific year
       }
-      return invMonth === selectedMonth && invYear === selectedYear;
+      return month === selectedMonth && year === selectedYear;
     }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [investments, selectedMonth, selectedYear]);
 
@@ -266,8 +274,9 @@ export default function InvestmentsScreen() {
   // Helper to determine summary title
   const getSummaryLabel = () => {
     if (selectedYear === 0) return 'Total Investments (All Time)';
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     if (selectedMonth === 0) return `Total Investments in ${selectedYear}`;
-    return `Investments in ${selectedMonth}/${selectedYear}`;
+    return `Investments in ${monthNames[selectedMonth - 1]} ${selectedYear}`;
   };
 
   return (
@@ -290,32 +299,33 @@ export default function InvestmentsScreen() {
         >
           {/* ✅ Sticky Container */}
           <View style={styles.stickyContainer}>
-            <View style={styles.summaryCard}>
-              {/* ✅ Filter Row (Inside Summary Card) */}
-              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 15 }}>
-                <View style={styles.pickerContainerOuter}>
-                  <Picker 
-                    selectedValue={selectedMonth} 
-                    onValueChange={setSelectedMonth} 
-                    style={styles.picker}
-                  >
-                    <Picker.Item label="All Time" value={0} color="#374151" />
-                    {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-                      .map((m, i) => <Picker.Item key={m} label={m} value={i + 1} color="#374151" />)}
-                  </Picker>
-                </View>
-                <View style={styles.pickerContainerOuter}>
-                  <Picker 
-                    selectedValue={selectedYear} 
-                    onValueChange={setSelectedYear} 
-                    style={styles.picker}
-                  >
-                    <Picker.Item label="All Time" value={0} color="#374151" />
-                    {[2024, 2025, 2026, 2027].map(y => <Picker.Item key={y} label={y.toString()} value={y} color="#374151" />)}
-                  </Picker>
-                </View>
+            {/* ✅ Filter Row (Moved OUTSIDE Summary Card) */}
+            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
+              <View style={styles.pickerContainerOuter}>
+                <Picker 
+                  selectedValue={selectedMonth} 
+                  onValueChange={setSelectedMonth} 
+                  style={styles.picker}
+                >
+                  <Picker.Item label="All Time" value={0} color="#374151" />
+                  {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+                    .map((m, i) => <Picker.Item key={m} label={m} value={i + 1} color="#374151" />)}
+                </Picker>
               </View>
+              <View style={styles.pickerContainerOuter}>
+                <Picker 
+                  selectedValue={selectedYear} 
+                  onValueChange={setSelectedYear} 
+                  style={styles.picker}
+                >
+                  <Picker.Item label="All Time" value={0} color="#374151" />
+                  {[2024, 2025, 2026, 2027].map(y => <Picker.Item key={y} label={y.toString()} value={y} color="#374151" />)}
+                </Picker>
+              </View>
+            </View>
 
+            {/* Summary Card */}
+            <View style={styles.summaryCard}>
               <Text style={styles.summaryLabel}>{getSummaryLabel()}</Text>
               <Text style={styles.grandTotal} adjustsFontSizeToFit minimumFontScale={0.8} numberOfLines={1}>
                 ₹{stats.totalAmount.toLocaleString('en-IN')}
