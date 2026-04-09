@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1082864843092",
+    "project_id": "wazirdairyfarmapp",
+    "storage_bucket": "wazirdairyfarmapp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1082864843092:android:68f6d678ba30a4dba130c1",
+        "android_client_info": {
+          "package_name": "com.wazirdairyfarm.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCYwb82HasjZ1clGP5BhLt8qCC4gvdDC34"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
