@@ -100,6 +100,7 @@ export default function MilkSalesScreen() {
   const filteredSales = useMemo(() => {
     return sales.filter((s) => {
       const { month, year } = parseDateString(s.date);
+      
       if (selectedMonth === 0) {
         return year === selectedYear; // All Time for selected year
       }
@@ -298,7 +299,7 @@ export default function MilkSalesScreen() {
               <View style={styles.filterPickerContainer}>
                 <Picker 
                   selectedValue={selectedMonth} 
-                  onValueChange={setSelectedMonth} 
+                  onValueChange={(val) => setSelectedMonth(Number(val))} 
                   style={styles.picker}
                 >
                   <Picker.Item label="All Time (Year)" value={0} color="#374151" />
@@ -308,7 +309,7 @@ export default function MilkSalesScreen() {
               <View style={styles.filterPickerContainer}>
                 <Picker 
                   selectedValue={selectedYear} 
-                  onValueChange={setSelectedYear} 
+                  onValueChange={(val) => setSelectedYear(Number(val))}
                   style={styles.picker}
                 >
                   {YEARS.map(y => <Picker.Item key={y} label={y.toString()} value={y} color="#374151" />)}
