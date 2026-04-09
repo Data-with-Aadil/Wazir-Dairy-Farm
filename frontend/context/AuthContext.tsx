@@ -131,16 +131,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const Notifications = await import('expo-notifications');
       const { status: existingStatus } = await Notifications.getPermissionsAsync();
       let finalStatus = existingStatus;
+      
       if (existingStatus !== 'granted') {
         const { status } = await Notifications.requestPermissionsAsync();
         finalStatus = status;
       }
-      if (finalStatus !== 'granted') return;
+      
+      if (finalStatus !== 'granted') {
+        alert("❌ Permission Denied by User");
+        return;
+      }
       
       const projectId = Constants?.expoConfig?.extra?.eas?.projectId ?? Constants?.easConfig?.projectId ?? "1b758208-fbd5-44ae-a860-d75e4cce3809";
+      
+      // 1. Token fetch karo
       const token = await Notifications.getExpoPushTokenAsync({ projectId });
+      
+      // 2. Screen par popup dikhao
+      alert("✅ Token Mil Gaya!\n" + token.data.substring(0, 20) + "...");
+      
+      // 3. State update karo (Yahi backend ko token bhejega)
       setExpoPushToken(token.data);
+      
     } catch (error) {
+      alert("⚠️ Token Error:\n" + String(error));
       console.error('Push token error:', error);
     }
   };
