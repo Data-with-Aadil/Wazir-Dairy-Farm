@@ -44,7 +44,7 @@ export default function MilkSalesScreen() {
   const [editMode, setEditMode] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  // Filters State
+  // ✅ Filters State (Default is Current Month)
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
@@ -82,22 +82,33 @@ export default function MilkSalesScreen() {
     setRefreshing(false);
   };
 
-  // ✅ Filter Logic
+  // ✅ Filter Logic (Includes 'All Time' check)
   const filteredSales = useMemo(() => {
     return sales.filter((s) => {
-      const d = new Date(s.date);
-      return (d.getMonth() + 1) === selectedMonth && d.getFullYear() === selectedYear;
+      const parts = s.date.split('-');
+      if (parts.length < 2) return false;
+      const saleYear = parseInt(parts[0], 10);
+      const saleMonth = parseInt(parts[1], 10);
+
+      if (selectedMonth === 0) {
+        return saleYear === selectedYear; // All Time for selected year
+      }
+      return saleMonth === selectedMonth && saleYear === selectedYear;
     });
   }, [sales, selectedMonth, selectedYear]);
 
-  // ✅ Stats Logic for Summary Card
+  // ✅ Stats Logic for Summary Card (Rounded Volume)
   const stats = useMemo(() => {
     const totalVolume = filteredSales.reduce((sum, s) => sum + Number(s.volume), 0);
     const totalEarnings = filteredSales.reduce((sum, s) => sum + Number(s.earnings), 0);
     const avgFat = filteredSales.length 
       ? (filteredSales.reduce((sum, s) => sum + Number(s.fat_percentage), 0) / filteredSales.length).toFixed(1) 
       : 0;
-    return { totalVolume, totalEarnings, avgFat };
+    return { 
+      totalVolume: totalVolume.toFixed(2), // Round to 2 decimals
+      totalEarnings, 
+      avgFat 
+    };
   }, [filteredSales]);
 
   const onDateChange = (event: any, selectedDate?: Date) => {
@@ -263,42 +274,56 @@ export default function MilkSalesScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Sales List */}
+        {/* Sales List with Sticky Header */}
         <ScrollView
           ref={scrollViewRef}
           style={styles.content}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          stickyHeaderIndices={[0]} // ✅ Makes the Summary Card sticky
         >
-          {/* ✅ Filter Row */}
-          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 15 }}>
-            <View style={styles.pickerContainer}>
-              <Picker selectedValue={selectedMonth} onValueChange={setSelectedMonth} style={styles.picker}>
-                {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-                  .map((m, i) => <Picker.Item key={m} label={m} value={i + 1} />)}
-              </Picker>
-            </View>
-            <View style={styles.pickerContainer}>
-              <Picker selectedValue={selectedYear} onValueChange={setSelectedYear} style={styles.picker}>
-                {[2024, 2025, 2026, 2027].map(y => <Picker.Item key={y} label={y.toString()} value={y} />)}
-              </Picker>
-            </View>
-          </View>
-
-          {/* ✅ Summary Card */}
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryLabel}>Total Sales ({selectedMonth}/{selectedYear})</Text>
-            <Text style={styles.grandTotal} adjustsFontSizeToFit minimumFontScale={0.8} numberOfLines={1}>
-              ₹{stats.totalEarnings.toLocaleString('en-IN')}
-            </Text>
-            <View style={styles.splitRow}>
-              <View>
-                <Text style={styles.splitLabel}>Total Vol</Text>
-                <Text style={styles.splitValue} adjustsFontSizeToFit minimumFontScale={0.8} numberOfLines={1}>{stats.totalVolume}L</Text>
+          {/* Sticky Container */}
+          <View style={styles.stickyContainer}>
+            <View style={styles.summaryCard}>
+              {/* Internal Filter Row */}
+              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 15 }}>
+                <View style={styles.pickerContainer}>
+                  <Picker 
+                    selectedValue={selectedMonth} 
+                    onValueChange={setSelectedMonth} 
+                    style={styles.picker}
+                  >
+                    <Picker.Item label="All Time (Year)" value={0} color="#374151" />
+                    {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+                      .map((m, i) => <Picker.Item key={m} label={m} value={i + 1} color="#374151" />)}
+                  </Picker>
+                </View>
+                <View style={styles.pickerContainer}>
+                  <Picker 
+                    selectedValue={selectedYear} 
+                    onValueChange={setSelectedYear} 
+                    style={styles.picker}
+                  >
+                    {[2024, 2025, 2026, 2027].map(y => <Picker.Item key={y} label={y.toString()} value={y} color="#374151" />)}
+                  </Picker>
+                </View>
               </View>
-              <View style={styles.splitDivider} />
-              <View>
-                <Text style={styles.splitLabel}>Avg Fat</Text>
-                <Text style={styles.splitValue} adjustsFontSizeToFit minimumFontScale={0.8} numberOfLines={1}>{stats.avgFat}%</Text>
+
+              <Text style={styles.summaryLabel}>
+                Total Sales ({selectedMonth === 0 ? selectedYear : `${selectedMonth}/${selectedYear}`})
+              </Text>
+              <Text style={styles.grandTotal} adjustsFontSizeToFit minimumFontScale={0.8} numberOfLines={1}>
+                ₹{stats.totalEarnings.toLocaleString('en-IN')}
+              </Text>
+              <View style={styles.splitRow}>
+                <View>
+                  <Text style={styles.splitLabel}>Total Vol</Text>
+                  <Text style={styles.splitValue} adjustsFontSizeToFit minimumFontScale={0.8} numberOfLines={1}>{stats.totalVolume}L</Text>
+                </View>
+                <View style={styles.splitDivider} />
+                <View>
+                  <Text style={styles.splitLabel}>Avg Fat</Text>
+                  <Text style={styles.splitValue} adjustsFontSizeToFit minimumFontScale={0.8} numberOfLines={1}>{stats.avgFat}%</Text>
+                </View>
               </View>
             </View>
           </View>
@@ -307,7 +332,7 @@ export default function MilkSalesScreen() {
             <View style={styles.emptyState}>
               <Ionicons name="water-outline" size={64} color="#D1D5DB" />
               <Text style={styles.emptyText}>No milk sales found</Text>
-              <Text style={styles.emptySubtext}>Try a different month or add a new entry</Text>
+              <Text style={styles.emptySubtext}>Try a different filter or add a new entry</Text>
             </View>
           ) : (
             filteredSales.map((sale) => (
@@ -347,10 +372,14 @@ export default function MilkSalesScreen() {
           )}
         </ScrollView>
 
-        {/* ✅ Fix: KeyboardAvoidingView is now strictly wrapping the inner modal content */}
         <Modal visible={modalVisible} transparent animationType="slide">
           <View style={styles.modalOverlay}>
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalContent}>
+            {/* ✅ Fix: Keyboard vertical offset and proper behavior */}
+            <KeyboardAvoidingView 
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+              style={styles.modalContent}
+              keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 20}
+            >
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle} adjustsFontSizeToFit minimumFontScale={0.8} numberOfLines={1}>
                   {editMode ? 'Edit Milk Sale' : 'Add Milk Sale'}
@@ -360,7 +389,7 @@ export default function MilkSalesScreen() {
                 </TouchableOpacity>
               </View>
 
-              <ScrollView>
+              <ScrollView showsVerticalScrollIndicator={false}>
                 <View style={styles.formGroup}>
                   <Text style={styles.label}>Date</Text>
                   <TouchableOpacity onPress={() => setShowDatePicker(true)} style={styles.dateButton}>
@@ -380,6 +409,7 @@ export default function MilkSalesScreen() {
                     onChangeText={setVolume}
                     keyboardType="numeric"
                     placeholder="0"
+                    placeholderTextColor="#9CA3AF"
                   />
                 </View>
 
@@ -391,6 +421,7 @@ export default function MilkSalesScreen() {
                     onChangeText={setFatPercentage}
                     keyboardType="numeric"
                     placeholder="0"
+                    placeholderTextColor="#9CA3AF"
                   />
                 </View>
 
@@ -402,6 +433,7 @@ export default function MilkSalesScreen() {
                     onChangeText={setRate}
                     keyboardType="numeric"
                     placeholder="8.4"
+                    placeholderTextColor="#9CA3AF"
                   />
                 </View>
 
@@ -445,9 +477,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(255, 255, 255, 0.92)',
   },
-  container: {
-    flex: 1,
-  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -476,23 +505,27 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
   },
+  stickyContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.92)', // Keeps background solid behind sticky header
+    paddingBottom: 10,
+  },
   pickerContainer: {
     flex: 1,
     backgroundColor: '#fff',
     borderRadius: 10,
-    height: 45,
+    height: 40,
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
   picker: {
-    height: 45,
+    height: 40,
+    color: '#374151',
   },
   summaryCard: {
     backgroundColor: '#1F2937',
     borderRadius: 15,
     padding: 20,
-    marginBottom: 20,
   },
   summaryLabel: {
     color: '#9CA3AF',
@@ -528,7 +561,7 @@ const styles = StyleSheet.create({
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: 100,
+    paddingTop: 80,
   },
   emptyText: {
     fontSize: 16,
@@ -613,7 +646,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
-    maxHeight: '90%',
+    maxHeight: '85%',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -643,7 +676,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     fontSize: 15,
-    color: '#1F2937',
+    color: '#374151',
   },
   dateButton: {
     backgroundColor: '#F9FAFB',
@@ -685,9 +718,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: 'center',
     marginTop: 8,
-  },
-  submitButtonDisabled: {
-    backgroundColor: '#9CA3AF',
+    marginBottom: 20,
   },
   submitButtonText: {
     color: '#fff',
