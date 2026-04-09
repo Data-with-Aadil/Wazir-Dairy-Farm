@@ -266,9 +266,9 @@ export default function DLSScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           stickyHeaderIndices={[0]} // ✅ Makes the Summary Card & Filter sticky
         >
-          {/* Sticky Container */}
+          {/* ✅ Sticky Container */}
           <View style={styles.stickyContainer}>
-            {/* ✅ Filter Row (Moved OUTSIDE Summary Card) */}
+            {/* ✅ Filter Row (Moved OUTSIDE Summary Card, exactly like Expenditure) */}
             <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
               <View style={styles.pickerContainer}>
                 <Picker 
@@ -282,6 +282,7 @@ export default function DLSScreen() {
               </View>
             </View>
 
+            {/* ✅ Summary Card */}
             <View style={styles.summaryCard}>
               <Text style={styles.summaryLabel}>
                 {selectedYear === 0 ? 'Total Received (All Time)' : `Total Received in ${selectedYear}`}
@@ -331,6 +332,7 @@ export default function DLSScreen() {
 
         <Modal visible={modalVisible} transparent animationType="slide">
           <View style={styles.modalOverlay}>
+            {/* ✅ Fix: KeyboardAvoidingView vertical offset for iOS/Android */}
             <KeyboardAvoidingView 
               behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
               style={styles.modalContent}
@@ -345,7 +347,7 @@ export default function DLSScreen() {
                 </TouchableOpacity>
               </View>
 
-              <ScrollView>
+              <ScrollView showsVerticalScrollIndicator={false}>
                 <View style={styles.formGroup}>
                   <Text style={styles.label}>Month</Text>
                   <View style={styles.pickerContainerInner}>
@@ -402,12 +404,13 @@ export default function DLSScreen() {
                 <View style={styles.formGroup}>
                   <Text style={styles.label}>Notes (Optional)</Text>
                   <TextInput
-                    style={[styles.input, { minHeight: 60 }]}
+                    style={[styles.input, { minHeight: 80 }]}
                     value={notes}
                     onChangeText={setNotes}
-                    placeholder="Optional"
+                    placeholder="Optional notes"
                     placeholderTextColor="#9CA3AF"
                     multiline
+                    textAlignVertical="top"
                   />
                 </View>
               </ScrollView>
