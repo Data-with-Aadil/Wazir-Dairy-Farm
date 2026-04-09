@@ -100,11 +100,6 @@ export default function DashboardScreen() {
 
   const scrollViewRef = React.useRef<ScrollView>(null);
 
-  useEffect(() => {
-    if (!isLoading && !user) {
-      router.replace('/');
-    }
-  }, [user, isLoading]);
 
   useFocusEffect(
     React.useCallback(() => {
