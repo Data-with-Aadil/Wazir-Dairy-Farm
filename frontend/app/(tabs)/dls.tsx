@@ -50,15 +50,14 @@ export default function DLSScreen() {
 
   const currentDate = new Date();
   
-  // ✅ Filters State
-  const [filterYear, setFilterYear] = useState(currentDate.getFullYear().toString());
+  // ✅ Filters State (Default is Current Year, 0 means All Time)
+  const [selectedYear, setSelectedYear] = useState<number>(currentDate.getFullYear());
 
   // Form State
   const [month, setMonth] = useState((currentDate.getMonth() + 1).toString());
   const [year, setYear] = useState(currentDate.getFullYear().toString());
   const [amount, setAmount] = useState('');
   
-  // ✅ Fixed Date Input to use DateTimePicker instead of TextInput
   const [date, setDate] = useState(new Date()); 
   const [showDatePicker, setShowDatePicker] = useState(false);
   
@@ -101,8 +100,11 @@ export default function DLSScreen() {
 
   // ✅ Filter & Stats Logic
   const filteredDLS = useMemo(() => {
-    return dlsList.filter((dls) => dls.year.toString() === filterYear);
-  }, [dlsList, filterYear]);
+    return dlsList.filter((dls) => {
+      if (selectedYear === 0) return true; // Show all if "All Time" is selected
+      return dls.year === selectedYear;
+    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [dlsList, selectedYear]);
 
   const stats = useMemo(() => {
     const totalAmount = filteredDLS.reduce((sum, dls) => sum + Number(dls.amount), 0);
@@ -154,7 +156,7 @@ export default function DLSScreen() {
     setMonth(dls.month.toString());
     setYear(dls.year.toString());
     setAmount(dls.amount.toString());
-    setDate(new Date(dls.date)); // Convert string to Date for picker
+    setDate(new Date(dls.date)); 
     setNotes(dls.notes || '');
     setModalVisible(true);
   };
@@ -257,34 +259,44 @@ export default function DLSScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* DLS List */}
+        {/* DLS List with Sticky Header */}
         <ScrollView
           ref={scrollViewRef}
           style={styles.content}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          stickyHeaderIndices={[0]} // ✅ Makes the Summary Card & Filter sticky
         >
-          {/* ✅ Filter Row */}
-          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 15 }}>
-            <View style={styles.pickerContainer}>
-              <Picker selectedValue={filterYear} onValueChange={setFilterYear} style={styles.picker}>
-                {['2024', '2025', '2026', '2027'].map(y => <Picker.Item key={y} label={`Year: ${y}`} value={y} />)}
-              </Picker>
-            </View>
-          </View>
+          {/* Sticky Container */}
+          <View style={styles.stickyContainer}>
+            <View style={styles.summaryCard}>
+              {/* ✅ Internal Filter Row */}
+              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 15 }}>
+                <View style={styles.pickerContainer}>
+                  <Picker 
+                    selectedValue={selectedYear} 
+                    onValueChange={(val) => setSelectedYear(Number(val))} 
+                    style={styles.picker}
+                  >
+                    <Picker.Item label="All Time" value={0} color="#374151" />
+                    {[2024, 2025, 2026, 2027].map(y => <Picker.Item key={y} label={`Year: ${y}`} value={y} color="#374151" />)}
+                  </Picker>
+                </View>
+              </View>
 
-          {/* ✅ Summary Card */}
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryLabel}>Total Received in {filterYear}</Text>
-            <Text style={styles.grandTotal} adjustsFontSizeToFit minimumFontScale={0.8} numberOfLines={1}>
-              ₹{stats.totalAmount.toLocaleString('en-IN')}
-            </Text>
+              <Text style={styles.summaryLabel}>
+                {selectedYear === 0 ? 'Total Received (All Time)' : `Total Received in ${selectedYear}`}
+              </Text>
+              <Text style={styles.grandTotal} adjustsFontSizeToFit minimumFontScale={0.8} numberOfLines={1}>
+                ₹{stats.totalAmount.toLocaleString('en-IN')}
+              </Text>
+            </View>
           </View>
 
           {filteredDLS.length === 0 ? (
             <View style={styles.emptyState}>
               <Ionicons name="lock-closed-outline" size={64} color="#D1D5DB" />
-              <Text style={styles.emptyText}>No payments recorded yet</Text>
-              <Text style={styles.emptySubtext}>Tap + to add your first payment</Text>
+              <Text style={styles.emptyText}>No payments found</Text>
+              <Text style={styles.emptySubtext}>Try changing the filter or add new payment</Text>
             </View>
           ) : (
             filteredDLS.map((dls) => (
@@ -317,10 +329,14 @@ export default function DLSScreen() {
           )}
         </ScrollView>
 
-        {/* ✅ Fix: KeyboardAvoidingView is now strictly wrapping the inner modal content */}
         <Modal visible={modalVisible} transparent animationType="slide">
           <View style={styles.modalOverlay}>
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalContent}>
+            {/* ✅ Fix: KeyboardAvoidingView vertical offset for iOS/Android */}
+            <KeyboardAvoidingView 
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+              style={styles.modalContent}
+              keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 20}
+            >
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle} adjustsFontSizeToFit minimumFontScale={0.8} numberOfLines={1}>
                   {editMode ? 'Edit Payment' : 'Add Payment'}
@@ -330,7 +346,7 @@ export default function DLSScreen() {
                 </TouchableOpacity>
               </View>
 
-              <ScrollView>
+              <ScrollView showsVerticalScrollIndicator={false}>
                 <View style={styles.formGroup}>
                   <Text style={styles.label}>Month</Text>
                   <View style={styles.pickerContainerInner}>
@@ -340,7 +356,7 @@ export default function DLSScreen() {
                       style={styles.picker}
                     >
                       {MONTHS.map((m, idx) => (
-                        <Picker.Item key={idx} label={m} value={(idx + 1).toString()} />
+                        <Picker.Item key={idx} label={m} value={(idx + 1).toString()} color="#374151" />
                       ))}
                     </Picker>
                   </View>
@@ -355,7 +371,7 @@ export default function DLSScreen() {
                       style={styles.picker}
                     >
                       {[2024, 2025, 2026, 2027].map((y) => (
-                        <Picker.Item key={y} label={y.toString()} value={y.toString()} />
+                        <Picker.Item key={y} label={y.toString()} value={y.toString()} color="#374151" />
                       ))}
                     </Picker>
                   </View>
@@ -369,6 +385,7 @@ export default function DLSScreen() {
                     onChangeText={setAmount}
                     keyboardType="numeric"
                     placeholder="0"
+                    placeholderTextColor="#9CA3AF"
                   />
                 </View>
 
@@ -390,6 +407,7 @@ export default function DLSScreen() {
                     value={notes}
                     onChangeText={setNotes}
                     placeholder="Optional"
+                    placeholderTextColor="#9CA3AF"
                     multiline
                   />
                 </View>
@@ -459,7 +477,12 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    padding: 16,
+    paddingHorizontal: 16,
+  },
+  stickyContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    paddingBottom: 10,
+    paddingTop: 8,
   },
   pickerContainer: {
     flex: 1,
@@ -478,13 +501,13 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   picker: {
-    height: 50,
+    height: 45,
+    color: '#374151',
   },
   summaryCard: {
     backgroundColor: '#1F2937',
     borderRadius: 15,
     padding: 20,
-    marginBottom: 20,
   },
   summaryLabel: {
     color: '#9CA3AF',
@@ -622,7 +645,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     fontSize: 15,
-    color: '#1F2937',
+    color: '#374151', // ✅ Set to dark grey
   },
   dateButton: {
     backgroundColor: '#F9FAFB',
@@ -645,6 +668,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: 'center',
     marginTop: 8,
+    marginBottom: 20, // Give some padding at bottom for scrolling
   },
   submitButtonText: {
     color: '#fff',
