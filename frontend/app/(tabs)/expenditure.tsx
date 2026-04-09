@@ -60,6 +60,16 @@ const CATEGORIES = {
   Others: ['Labour', 'Electricity', 'Veterinary', 'Transport', 'Maintenance', 'Others'],
 };
 
+// ✅ Bulletproof Date Parser (Fixes Web Timezone/0 data bugs)
+const parseDateString = (dateStr: string) => {
+  if (!dateStr) return { month: 0, year: 0 };
+  const parts = dateStr.split('-');
+  if (parts.length >= 2) {
+    return { year: parseInt(parts[0], 10), month: parseInt(parts[1], 10) };
+  }
+  return { month: 0, year: 0 };
+};
+
 interface Expenditure {
   _id: string;
   amount: number;
@@ -114,15 +124,15 @@ export default function ExpenditureScreen() {
   const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth() + 1); 
   const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
 
-  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const MONTHS = ['All Time', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const YEARS = [2024, 2025, 2026, 2027];
 
-  // ✅ Aadil & Imran Split Logic (Syncs with filter)
+  // ✅ Aadil & Imran Split Logic (Syncs with bulletproof filter)
   const stats = useMemo(() => {
     const filtered = expenditures.filter(exp => {
-      const expDate = new Date(exp.date);
-      if (selectedMonth === 0) return expDate.getFullYear() === selectedYear;
-      return (expDate.getMonth() + 1 === selectedMonth) && (expDate.getFullYear() === selectedYear);
+      const { month, year } = parseDateString(exp.date);
+      if (selectedMonth === 0) return year === selectedYear;
+      return month === selectedMonth && year === selectedYear;
     });
 
     const aadilTotal = filtered
@@ -141,12 +151,12 @@ export default function ExpenditureScreen() {
     };
   }, [expenditures, selectedMonth, selectedYear]);
 
-  // ✅ Bills Filter Logic
+  // ✅ Bills Filter Logic (Syncs with bulletproof filter)
   const filteredBills = useMemo(() => {
     return bills.filter(bill => {
-      const billDate = new Date(bill.date);
-      if (selectedMonth === 0) return billDate.getFullYear() === selectedYear;
-      return (billDate.getMonth() + 1 === selectedMonth) && (billDate.getFullYear() === selectedYear);
+      const { month, year } = parseDateString(bill.date);
+      if (selectedMonth === 0) return year === selectedYear;
+      return month === selectedMonth && year === selectedYear;
     }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [bills, selectedMonth, selectedYear]);
 
@@ -276,7 +286,7 @@ export default function ExpenditureScreen() {
     }
   };
 
-  // ✅ Fix Point 5: Cross-Platform (Web + Mobile) Bill Download
+  // ✅ Web + Mobile Download Logic Fix
   const handleDownloadBill = async (bill: Bill) => {
     try {
       const sanitizedDesc = bill.description.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 20);
@@ -284,17 +294,15 @@ export default function ExpenditureScreen() {
 
       // 🌐 WEB LOGIC
       if (Platform.OS === 'web') {
-        // Web browser requires an HTML anchor tag click to download files
         const link = document.createElement('a');
-        link.href = bill.image; // bill.image is already a base64 data URI
+        link.href = bill.image; // Assuming it's already a base64 data URI
         link.download = fileName;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        // Using window.alert for web just to be safe
         window.alert('✅ Bill downloaded successfully!');
       } 
-      // 📱 MOBILE LOGIC (Android / iOS)
+      // 📱 MOBILE LOGIC
       else {
         const fileUri = FileSystem.cacheDirectory + fileName;
         const base64Data = bill.image.replace(/^data:image\/\w+;base64,/, '');
@@ -506,7 +514,7 @@ export default function ExpenditureScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* ✅ Fix Point 11: Sticky Header Applied */}
+        {/* ✅ Sticky Header List Container */}
         <ScrollView
           ref={scrollViewRef}
           style={styles.content}
@@ -515,7 +523,7 @@ export default function ExpenditureScreen() {
         >
           {/* Sticky Container */}
           <View style={styles.stickyContainer}>
-            {/* Filter Row (Applies to both Expenditures and Bills) */}
+            {/* Filter Row */}
             <View style={{ flexDirection: 'row', gap: 10, marginBottom: activeTab === 'expenditures' ? 15 : 5 }}>
               <View style={styles.filterPickerContainer}>
                 <Picker 
@@ -523,8 +531,7 @@ export default function ExpenditureScreen() {
                   onValueChange={setSelectedMonth} 
                   style={styles.picker}
                 >
-                  <Picker.Item label="All Time (Year)" value={0} color="#374151" />
-                  {MONTHS.slice(1).map((m, i) => <Picker.Item key={m} label={m} value={i + 1} color="#374151" />)}
+                  {MONTHS.map((m, i) => <Picker.Item key={m} label={m} value={i} color="#374151" />)}
                 </Picker>
               </View>
               <View style={styles.filterPickerContainer}>
@@ -538,11 +545,11 @@ export default function ExpenditureScreen() {
               </View>
             </View>
 
-            {/* Summary Card (Only visible in Expenditures Tab) */}
+            {/* Summary Card */}
             {activeTab === 'expenditures' && (
               <View style={styles.summaryCard}>
                 <Text style={styles.summaryLabel}>
-                  Total Expenditure ({selectedMonth === 0 ? selectedYear : `${selectedMonth}/${selectedYear}`})
+                  Total Expenditure ({selectedMonth === 0 ? selectedYear : `${MONTHS[selectedMonth]}/${selectedYear}`})
                 </Text>
                 <Text style={styles.grandTotal} adjustsFontSizeToFit minimumFontScale={0.8} numberOfLines={1}>
                   ₹{stats.grandTotal.toLocaleString('en-IN')}
@@ -820,7 +827,7 @@ export default function ExpenditureScreen() {
 
                 <TouchableOpacity
                   onPress={handleUploadBill}
-                  style={[styles.submitButton, !billImage && styles.submitButtonDisabled, loading && styles.submitButtonDisabled]}
+                  style={[styles.submitButton, (!billImage || loading) && styles.submitButtonDisabled]}
                   disabled={!billImage || loading}
                 >
                   {loading ? (
@@ -839,364 +846,64 @@ export default function ExpenditureScreen() {
 }
 
 const styles = StyleSheet.create({
-  background: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
-  },
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.92)',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 56,
-    paddingBottom: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#1F2937',
-  },
-  addButton: {
-    backgroundColor: '#10B981',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  tabContainer: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    marginHorizontal: 16,
-    marginTop: 12,
-    borderRadius: 12,
-    padding: 4,
-    marginBottom: 8,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 10,
-    gap: 6,
-  },
-  activeTab: {
-    backgroundColor: '#10B981',
-  },
-  tabText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#6B7280',
-  },
-  activeTabText: {
-    color: '#fff',
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: 16,
-  },
-  stickyContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.92)', // Hides scrolling content underneath
-    paddingBottom: 10,
-    paddingTop: 8,
-  },
-  filterPickerContainer: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    height: 40,
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  pickerContainerInner: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    overflow: 'hidden',
-  },
-  picker: {
-    height: 40,
-    color: '#374151',
-  },
-  summaryCard: {
-    backgroundColor: '#1F2937',
-    borderRadius: 15,
-    padding: 20,
-  },
-  summaryLabel: {
-    color: '#9CA3AF',
-    fontSize: 12,
-  },
-  grandTotal: {
-    color: '#fff',
-    fontSize: 28,
-    fontWeight: 'bold',
-  },
-  splitRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    borderTopWidth: 1,
-    borderTopColor: '#374151',
-    paddingTop: 15,
-    marginTop: 10,
-  },
-  splitLabel: {
-    color: '#9CA3AF',
-    fontSize: 11,
-  },
-  splitValue: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  splitDivider: {
-    width: 1,
-    backgroundColor: '#374151',
-    height: '100%',
-  },
-  emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 60,
-  },
-  emptyText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#6B7280',
-    marginTop: 16,
-  },
-  emptySubtext: {
-    fontSize: 13,
-    color: '#9CA3AF',
-    marginTop: 8,
-  },
-  card: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  cardDate: {
-    fontSize: 11,
-    color: '#6B7280',
-    marginBottom: 4,
-  },
-  cardAmount: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#EF4444',
-    marginBottom: 6,
-  },
-  cardCategory: {
-    fontSize: 11,
-    color: '#6B7280',
-  },
-  cardNotes: {
-    fontSize: 11,
-    color: '#9CA3AF',
-    fontStyle: 'italic',
-    marginTop: 4,
-  },
-  cardPaidBy: {
-    fontSize: 11,
-    color: '#6B7280',
-    marginTop: 4,
-  },
-  editIconButton: {
-    padding: 8,
-    backgroundColor: 'transparent',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#3B82F6',
-  },
-  deleteIconButton: {
-    padding: 8,
-    backgroundColor: 'transparent',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#EF4444',
-  },
-  downloadIconButton: {
-    padding: 8,
-    backgroundColor: 'transparent',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#10B981',
-  },
-  billCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  billImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 8,
-    backgroundColor: '#F3F4F6',
-    marginRight: 12,
-  },
-  billInfo: {
-    flex: 1,
-  },
-  billDescription: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginBottom: 4,
-  },
-  billAmount: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#EF4444',
-    marginBottom: 2,
-  },
-  billDate: {
-    fontSize: 11,
-    color: '#6B7280',
-    marginBottom: 2,
-  },
-  billUploader: {
-    fontSize: 10,
-    color: '#9CA3AF',
-  },
-  imagePickerContainer: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 16,
-  },
-  imagePickerButton: {
-    flex: 1,
-    backgroundColor: '#F0FDF4',
-    borderRadius: 12,
-    padding: 24,
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#10B981',
-    borderStyle: 'dashed',
-  },
-  imagePickerText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#10B981',
-    marginTop: 8,
-  },
-  imagePreviewContainer: {
-    position: 'relative',
-    marginBottom: 16,
-  },
-  imagePreview: {
-    width: '100%',
-    height: 200,
-    borderRadius: 12,
-    backgroundColor: '#F3F4F6',
-  },
-  removeImageButton: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderRadius: 16,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    maxHeight: '90%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1F2937',
-  },
-  formGroup: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 8,
-  },
-  input: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    fontSize: 15,
-    color: '#374151',
-  },
-  dateButton: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  dateButtonText: {
-    fontSize: 15,
-    color: '#1F2937',
-  },
-  submitButton: {
-    backgroundColor: '#10B981',
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 20,
-  },
-  submitButtonDisabled: {
-    backgroundColor: '#9CA3AF',
-  },
-  submitButtonText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '600',
-  },
+  background: { flex: 1, width: '100%', height: '100%' },
+  overlay: { flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.92)' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 56, paddingBottom: 16, backgroundColor: 'rgba(255, 255, 255, 0.95)', borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
+  title: { fontSize: 24, fontWeight: 'bold', color: '#1F2937' },
+  addButton: { backgroundColor: '#10B981', width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
+  tabContainer: { flexDirection: 'row', backgroundColor: 'rgba(255, 255, 255, 0.95)', marginHorizontal: 16, marginTop: 12, borderRadius: 12, padding: 4, marginBottom: 8 },
+  tab: { flex: 1, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 10, gap: 6 },
+  activeTab: { backgroundColor: '#10B981' },
+  tabText: { fontSize: 14, fontWeight: '600', color: '#6B7280' },
+  activeTabText: { color: '#fff' },
+  content: { flex: 1, paddingHorizontal: 16 },
+  stickyContainer: { backgroundColor: 'rgba(255, 255, 255, 0.92)', paddingBottom: 10, paddingTop: 8 },
+  filterPickerContainer: { flex: 1, backgroundColor: '#fff', borderRadius: 10, height: 40, justifyContent: 'center', borderWidth: 1, borderColor: '#E5E7EB' },
+  pickerContainerInner: { backgroundColor: '#F9FAFB', borderRadius: 8, borderWidth: 1, borderColor: '#E5E7EB', overflow: 'hidden' },
+  picker: { height: 40, color: '#374151' },
+  summaryCard: { backgroundColor: '#1F2937', borderRadius: 15, padding: 20 },
+  summaryLabel: { color: '#9CA3AF', fontSize: 12 },
+  grandTotal: { color: '#fff', fontSize: 28, fontWeight: 'bold', marginTop: 4 },
+  splitRow: { flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: '#374151', paddingTop: 15, marginTop: 10 },
+  splitLabel: { color: '#9CA3AF', fontSize: 11 },
+  splitValue: { color: '#fff', fontSize: 16, fontWeight: 'bold', flexShrink: 1 },
+  splitDivider: { width: 1, backgroundColor: '#374151', height: '100%' },
+  emptyState: { alignItems: 'center', justifyContent: 'center', paddingTop: 80 },
+  emptyText: { fontSize: 18, fontWeight: '600', color: '#6B7280', marginTop: 16 },
+  emptySubtext: { fontSize: 14, color: '#9CA3AF', marginTop: 8 },
+  card: { backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: 12, padding: 16, marginBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between' },
+  cardDate: { fontSize: 12, color: '#6B7280', marginBottom: 4 },
+  cardAmount: { fontSize: 24, fontWeight: 'bold', color: '#EF4444', marginBottom: 8 },
+  cardCategory: { fontSize: 12, color: '#6B7280' },
+  cardNotes: { fontSize: 12, color: '#9CA3AF', fontStyle: 'italic', marginTop: 4 },
+  cardPaidBy: { fontSize: 12, color: '#6B7280', marginTop: 4 },
+  editIconButton: { padding: 8, backgroundColor: 'transparent', borderRadius: 8, borderWidth: 1, borderColor: '#3B82F6' },
+  deleteIconButton: { padding: 8, backgroundColor: 'transparent', borderRadius: 8, borderWidth: 1, borderColor: '#EF4444' },
+  downloadIconButton: { padding: 8, backgroundColor: 'transparent', borderRadius: 8, borderWidth: 1, borderColor: '#10B981' },
+  billCard: { backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: 12, padding: 12, marginBottom: 12, flexDirection: 'row', alignItems: 'center', elevation: 2 },
+  billImage: { width: 80, height: 80, borderRadius: 8, backgroundColor: '#F3F4F6', marginRight: 12 },
+  billInfo: { flex: 1 },
+  billDescription: { fontSize: 14, fontWeight: '600', color: '#1F2937', marginBottom: 4 },
+  billAmount: { fontSize: 16, fontWeight: 'bold', color: '#EF4444', marginBottom: 2 },
+  billDate: { fontSize: 11, color: '#6B7280', marginBottom: 2 },
+  billUploader: { fontSize: 10, color: '#9CA3AF' },
+  imagePickerContainer: { flexDirection: 'row', gap: 12, marginBottom: 16 },
+  imagePickerButton: { flex: 1, backgroundColor: '#F0FDF4', borderRadius: 12, padding: 24, alignItems: 'center', borderWidth: 2, borderColor: '#10B981', borderStyle: 'dashed' },
+  imagePickerText: { fontSize: 14, fontWeight: '600', color: '#10B981', marginTop: 8 },
+  imagePreviewContainer: { position: 'relative', marginBottom: 16 },
+  imagePreview: { width: '100%', height: 200, borderRadius: 12, backgroundColor: '#F3F4F6' },
+  removeImageButton: { position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(255, 255, 255, 0.9)', borderRadius: 16 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: '85%' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#1F2937' },
+  formGroup: { marginBottom: 16 },
+  label: { fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8 },
+  input: { backgroundColor: '#F9FAFB', borderRadius: 8, borderWidth: 1, borderColor: '#E5E7EB', paddingVertical: 12, paddingHorizontal: 16, fontSize: 16, color: '#374151' },
+  dateButton: { backgroundColor: '#F9FAFB', borderRadius: 8, borderWidth: 1, borderColor: '#E5E7EB', paddingVertical: 12, paddingHorizontal: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  dateButtonText: { fontSize: 16, color: '#1F2937' },
+  submitButton: { backgroundColor: '#10B981', borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 8, marginBottom: 20 },
+  submitButtonDisabled: { backgroundColor: '#9CA3AF' },
+  submitButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
 });
