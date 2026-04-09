@@ -29,7 +29,7 @@ const BACKEND_URL = "https://wazir-dairy-farm-1.onrender.com";
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const YEARS = [2024, 2025, 2026, 2027];
 
-// Date parser helper
+// ✅ Bulletproof Date Parser (Fixes timezone 0 data bugs)
 const parseDateString = (dateStr: string) => {
   if (!dateStr) return { month: 0, year: 0 };
   const parts = dateStr.split('-');
@@ -68,7 +68,7 @@ export default function DashboardScreen() {
   const { user, logout, isLoading } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
   
-  // Local Data States for calculations
+  // Local Data States
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [milkSales, setMilkSales] = useState<MilkSale[]>([]);
   const [expenditures, setExpenditures] = useState<Expenditure[]>([]);
@@ -92,7 +92,7 @@ export default function DashboardScreen() {
   const [perfMonth, setPerfMonth] = useState(currentMonth);
   const [perfYear, setPerfYear] = useState(currentYear);
   
-  const [dlsFilterMonth, setDlsFilterMonth] = useState(0); // 0 = All Time / Default Logic
+  const [dlsFilterMonth, setDlsFilterMonth] = useState(0); // 0 = All Time
   const [dlsFilterYear, setDlsFilterYear] = useState(currentYear);
   
   const [calMonth, setCalMonth] = useState(currentMonth);
@@ -100,10 +100,14 @@ export default function DashboardScreen() {
 
   const scrollViewRef = React.useRef<ScrollView>(null);
 
+  useEffect(() => {
+    if (!isLoading && !user) {
+      router.replace('/');
+    }
+  }, [user, isLoading]);
 
   useFocusEffect(
     React.useCallback(() => {
-      // ✅ Fix Point 3: Removed scrollViewRef.current?.scrollTo to prevent calendar jumping
       fetchAllData();
     }, [])
   );
@@ -136,7 +140,7 @@ export default function DashboardScreen() {
     await fetchAllData();
   };
 
-  // ✅ Fix Point 1: All Time Stats (Merged Card Logic)
+  // 1. ALL TIME STATS
   const allTimeStats = useMemo(() => {
     const totalInv = investments.reduce((sum, i) => sum + Number(i.amount || 0), 0);
     const aadilInv = investments.filter(i => i.investor === 'Aadil').reduce((sum, i) => sum + Number(i.amount || 0), 0);
@@ -149,7 +153,7 @@ export default function DashboardScreen() {
     return { totalInv, aadilInv, imranInv, netDlsAllTime, totalDlsAll, totalExpAll };
   }, [investments, dlsList, expenditures]);
 
-  // ✅ Fix Point 2: Monthly Performance Stats
+  // 2. MONTHLY PERFORMANCE STATS (Uses safe parseDateString)
   const perfStats = useMemo(() => {
     const earnings = milkSales.filter(s => {
       const d = parseDateString(s.date);
@@ -166,10 +170,9 @@ export default function DashboardScreen() {
     return { earnings, exp, net: earnings - exp };
   }, [milkSales, expenditures, perfMonth, perfYear]);
 
-  // ✅ Fix Point 2: DLS Stats (Last Month vs Selected Month)
+  // 3. DAIRY LOCK SALES STATS
   const dlsStats = useMemo(() => {
     if (dlsFilterMonth === 0) {
-      // Default: Show Last Month Stats
       const lastMonth = currentMonth === 1 ? 12 : currentMonth - 1;
       const lastMonthYear = currentMonth === 1 ? currentYear - 1 : currentYear;
 
@@ -178,6 +181,7 @@ export default function DashboardScreen() {
       ).reduce((sum, d) => sum + Number(d.amount || 0), 0);
 
       const lastMonthDls = dlsList.filter(d => d.month === lastMonth && d.year === lastMonthYear).reduce((sum, d) => sum + Number(d.amount || 0), 0);
+      
       const lastMonthExp = expenditures.filter(e => {
         const d = parseDateString(e.date);
         return d.month === lastMonth && d.year === lastMonthYear;
@@ -189,15 +193,15 @@ export default function DashboardScreen() {
         label3: 'Last Month Profit', val3: lastMonthDls - lastMonthExp
       };
     } else {
-      // Filter Applied: Show specific month stats
       const currentMonthDls = dlsList.filter(d => d.month === dlsFilterMonth && d.year === dlsFilterYear).reduce((sum, d) => sum + Number(d.amount || 0), 0);
+      
       const currentMonthExp = expenditures.filter(e => {
         const d = parseDateString(e.date);
         return d.month === dlsFilterMonth && d.year === dlsFilterYear;
       }).reduce((sum, e) => sum + Number(e.amount || 0), 0);
 
       return {
-        label1: `Total in ${MONTHS[dlsFilterMonth-1]}`, val1: currentMonthDls,
+        label1: `Total DLS in ${MONTHS[dlsFilterMonth-1]}`, val1: currentMonthDls,
         label2: `${MONTHS[dlsFilterMonth-1]} DLS`, val2: currentMonthDls,
         label3: `${MONTHS[dlsFilterMonth-1]} Profit`, val3: currentMonthDls - currentMonthExp
       };
@@ -253,7 +257,6 @@ export default function DashboardScreen() {
     }
   };
 
-  // ✅ Fix Point 10: Clean Logout (Routing is now handled by AuthContext)
   const handleLogout = () => {
     Alert.alert('Logout', 'Are you sure you want to logout?', [
       { text: 'Cancel', style: 'cancel' },
@@ -261,7 +264,7 @@ export default function DashboardScreen() {
         text: 'Logout',
         style: 'destructive',
         onPress: async () => {
-          await logout(); // बस! बाकी सारा काम AuthContext खुद कर लेगा।
+          await logout();
         },
       },
     ]);
@@ -353,17 +356,25 @@ export default function DashboardScreen() {
             </View>
           </View>
 
-          {/* ✅ Point 1: Merged Card for All Time Investment & Net DLS */}
+          {/* ✅ Point 3 Fix: Imran Inv & Aadil Inv placed on the left side */}
           <View style={styles.card}>
             <Text style={styles.cardTitleMerged}>Overall Dashboard (All Time)</Text>
             <View style={styles.twoColumnRow}>
-              <View style={styles.halfCol}>
+              <View style={styles.halfColLeft}>
                 <Text style={styles.statLabelMerged}>Total Investment</Text>
                 <Text style={styles.mainValue} adjustsFontSizeToFit minimumFontScale={0.6} numberOfLines={1}>
                   ₹{allTimeStats.totalInv.toLocaleString('en-IN')}
                 </Text>
+                
+                <View style={styles.subStatsContainer}>
+                  <Text style={styles.subStatText}>Aadil: ₹{allTimeStats.aadilInv.toLocaleString('en-IN')}</Text>
+                  <Text style={styles.subStatText}>Imran: ₹{allTimeStats.imranInv.toLocaleString('en-IN')}</Text>
+                </View>
               </View>
-              <View style={styles.halfCol}>
+              
+              <View style={styles.verticalDivider} />
+              
+              <View style={styles.halfColRight}>
                 <Text style={styles.statLabelMerged}>Total DLS (Net)</Text>
                 <Text
                   style={[styles.mainValue, allTimeStats.netDlsAllTime >= 0 ? styles.positiveValue : styles.negativeValue]}
@@ -374,14 +385,9 @@ export default function DashboardScreen() {
                 <Text style={styles.netDLSSubtext} numberOfLines={1}>Total DLS - Total Exp</Text>
               </View>
             </View>
-            <View style={styles.divider} />
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel} numberOfLines={1}>Aadil Inv: ₹{allTimeStats.aadilInv.toLocaleString('en-IN')}</Text>
-              <Text style={styles.summaryLabel} numberOfLines={1}>Imran Inv: ₹{allTimeStats.imranInv.toLocaleString('en-IN')}</Text>
-            </View>
           </View>
 
-          {/* ✅ Point 2: Monthly Performance Card with Internal Filter */}
+          {/* MONTHLY PERFORMANCE CARD */}
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Monthly Performance</Text>
             <View style={styles.pickerRowInner}>
@@ -433,7 +439,7 @@ export default function DashboardScreen() {
             </View>
           </View>
 
-          {/* ✅ Point 2: Dairy Lock Sales Card with Internal Filter */}
+          {/* DAIRY LOCK SALES CARD */}
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Dairy Lock Sales</Text>
             <View style={styles.pickerRowInner}>
@@ -444,7 +450,7 @@ export default function DashboardScreen() {
                   style={styles.picker} 
                   itemStyle={styles.pickerItem}
                 >
-                  <Picker.Item label="All Time (Default)" value={0} color="#374151" />
+                  <Picker.Item label="No Filter" value={0} color="#374151" />
                   {MONTHS.map((m, i) => <Picker.Item key={m} label={m} value={i + 1} color="#374151" />)}
                 </Picker>
               </View>
@@ -571,7 +577,6 @@ export default function DashboardScreen() {
 
         <Modal visible={eventModalVisible} transparent animationType="slide">
           <View style={styles.modalOverlay}>
-            {/* ✅ Fix Point 9: Added keyboardVerticalOffset */}
             <KeyboardAvoidingView 
               behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
               style={styles.eventModalContent}
@@ -709,11 +714,34 @@ const styles = StyleSheet.create({
   },
   twoColumnRow: {
     flexDirection: 'row',
-    gap: 12,
   },
-  halfCol: {
+  halfColLeft: {
     flex: 1,
-    alignItems: 'center',
+    paddingRight: 10,
+    justifyContent: 'center',
+  },
+  halfColRight: {
+    flex: 1,
+    paddingLeft: 10,
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+  },
+  verticalDivider: {
+    width: 1,
+    backgroundColor: '#E5E7EB',
+    marginVertical: 10,
+  },
+  subStatsContainer: {
+    marginTop: 12,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
+  subStatText: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '600',
+    marginBottom: 2,
   },
   statLabelMerged: {
     fontSize: 12,
@@ -736,21 +764,6 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     marginTop: 2,
   },
-  divider: {
-    height: 1,
-    backgroundColor: '#E5E7EB',
-    marginVertical: 12,
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-  },
-  summaryLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#374151',
-  },
   pickerRowInner: {
     flexDirection: 'row',
     gap: 10,
@@ -767,7 +780,7 @@ const styles = StyleSheet.create({
   picker: {
     height: 40,
     width: '100%',
-    color: '#374151', // ✅ Fix Point 9
+    color: '#374151', 
   },
   pickerItem: {
     color: '#374151',
@@ -909,7 +922,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     fontSize: 15,
-    color: '#374151', // ✅ Fix Point 9
+    color: '#374151', 
   },
   reminderOptions: {
     flexDirection: 'row',
@@ -943,9 +956,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 8,
     marginBottom: 20,
-  },
-  submitButtonDisabled: {
-    backgroundColor: '#9CA3AF',
   },
   submitButtonText: {
     color: '#fff',
