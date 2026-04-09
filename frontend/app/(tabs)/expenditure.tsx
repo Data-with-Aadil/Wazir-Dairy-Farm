@@ -528,7 +528,7 @@ export default function ExpenditureScreen() {
               <View style={styles.filterPickerContainer}>
                 <Picker 
                   selectedValue={selectedMonth} 
-                  onValueChange={setSelectedMonth} 
+                  onValueChange={(val) => setSelectedMonth(Number(val))} 
                   style={styles.picker}
                 >
                   {MONTHS.map((m, i) => <Picker.Item key={m} label={m} value={i} color="#374151" />)}
@@ -537,7 +537,7 @@ export default function ExpenditureScreen() {
               <View style={styles.filterPickerContainer}>
                 <Picker 
                   selectedValue={selectedYear} 
-                  onValueChange={setSelectedYear} 
+                  onValueChange={(val) => setSelectedYear(Number(val))}
                   style={styles.picker}
                 >
                   {YEARS.map(y => <Picker.Item key={y} label={y.toString()} value={y} color="#374151" />)}
