@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -26,15 +26,18 @@ import { Picker } from '@react-native-picker/picker';
 const BACKGROUND_IMAGE = require('../../assets/images/0vjmy7gj_1000044672.jpg');
 const BACKEND_URL = "https://wazir-dairy-farm-1.onrender.com";
 
-interface DashboardStats {
-  total_investment: number;
-  aadil_investment: number;
-  imran_investment: number;
-  total_earnings: number;
-  total_expenditure: number;
-  net_profit: number;
-  total_dls: number;
-}
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const YEARS = [2024, 2025, 2026, 2027];
+
+// Date parser helper
+const parseDateString = (dateStr: string) => {
+  if (!dateStr) return { month: 0, year: 0 };
+  const parts = dateStr.split('-');
+  if (parts.length >= 2) {
+    return { year: parseInt(parts[0], 10), month: parseInt(parts[1], 10) };
+  }
+  return { month: 0, year: 0 };
+};
 
 interface MilkSale {
   date: string;
@@ -53,25 +56,49 @@ interface DLS {
   year: number;
 }
 
+interface Investment {
+  date: string;
+  amount: number;
+  investor: string;
+}
+
 const screenWidth = Dimensions.get('window').width;
 
 export default function DashboardScreen() {
   const { user, logout, isLoading } = useAuth();
-  const [stats, setStats] = useState<DashboardStats | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  
+  // Local Data States for calculations
+  const [investments, setInvestments] = useState<Investment[]>([]);
   const [milkSales, setMilkSales] = useState<MilkSale[]>([]);
   const [expenditures, setExpenditures] = useState<Expenditure[]>([]);
   const [dlsList, setDlsList] = useState<DLS[]>([]);
-  const [currentMonthDLS, setCurrentMonthDLS] = useState(0);
-  const [exporting, setExporting] = useState(false);
   const [events, setEvents] = useState<any[]>([]);
+  
+  // Modals & UI States
+  const [exporting, setExporting] = useState(false);
   const [eventModalVisible, setEventModalVisible] = useState(false);
   const [selectedDate, setSelectedDate] = useState('');
   const [eventDescription, setEventDescription] = useState('');
   const [reminder, setReminder] = useState('none');
   const [addingEvent, setAddingEvent] = useState(false);
-  const scrollViewRef = React.useRef<ScrollView>(null);
   const [loading, setLoading] = useState(true);
+
+  // Internal Filters States
+  const currentDate = new Date();
+  const currentMonth = currentDate.getMonth() + 1;
+  const currentYear = currentDate.getFullYear();
+
+  const [perfMonth, setPerfMonth] = useState(currentMonth);
+  const [perfYear, setPerfYear] = useState(currentYear);
+  
+  const [dlsFilterMonth, setDlsFilterMonth] = useState(0); // 0 = All Time / Default Logic
+  const [dlsFilterYear, setDlsFilterYear] = useState(currentYear);
+  
+  const [calMonth, setCalMonth] = useState(currentMonth);
+  const [calYear, setCalYear] = useState(currentYear);
+
+  const scrollViewRef = React.useRef<ScrollView>(null);
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -79,115 +106,119 @@ export default function DashboardScreen() {
     }
   }, [user, isLoading]);
 
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  useFocusEffect(
+    React.useCallback(() => {
+      // ✅ Fix Point 3: Removed scrollViewRef.current?.scrollTo to prevent calendar jumping
+      fetchAllData();
+    }, [])
+  );
 
-  const setupUsers = async () => {
+  const fetchAllData = async () => {
     try {
-      await fetch(`${BACKEND_URL}/api/auth/setup`, { method: 'POST' });
-    } catch (error) {
-      console.error('Setup error:', error);
-    }
-  };
+      const [invRes, salesRes, expRes, dlsRes, eventsRes] = await Promise.all([
+        fetch(`${BACKEND_URL}/api/investments`),
+        fetch(`${BACKEND_URL}/api/milk-sales`),
+        fetch(`${BACKEND_URL}/api/expenditures`),
+        fetch(`${BACKEND_URL}/api/dairy-lock-sales`),
+        fetch(`${BACKEND_URL}/api/events`)
+      ]);
 
-  const fetchStats = async () => {
-    try {
-      const response = await fetch(
-        `${BACKEND_URL}/api/stats/dashboard?month=${selectedMonth}&year=${selectedYear}`
-      );
-      const data = await response.json();
-      setStats(data);
+      if (invRes.ok) setInvestments(await invRes.json());
+      if (salesRes.ok) setMilkSales(await salesRes.json());
+      if (expRes.ok) setExpenditures(await expRes.json());
+      if (dlsRes.ok) setDlsList(await dlsRes.json());
+      if (eventsRes.ok) setEvents(await eventsRes.json());
     } catch (error) {
-      console.error("Fetch error:", error);
+      console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
-  
-  useFocusEffect(
-    React.useCallback(() => {
-      scrollViewRef.current?.scrollTo({ y: 0, animated: false });
-      fetchStats();
-      fetchChartData();
-      fetchDLS();
-      fetchEvents();
-    }, [selectedMonth, selectedYear])
-  );
 
-  const fetchChartData = async () => {
-    try {
-      const [salesRes, expendRes] = await Promise.all([
-        fetch(`${BACKEND_URL}/api/milk-sales`),
-        fetch(`${BACKEND_URL}/api/expenditures`),
-      ]);
-
-      if (salesRes.ok) {
-        const salesData = await salesRes.json();
-        setMilkSales(salesData);
-      }
-
-      if (expendRes.ok) {
-        const expendData = await expendRes.json();
-        setExpenditures(expendData);
-      }
-    } catch (error) {
-      console.error('Error fetching chart data:', error);
-    }
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchAllData();
   };
 
-  const fetchDLS = async () => {
-    try {
-      const response = await fetch(`${BACKEND_URL}/api/dairy-lock-sales`);
-      if (response.ok) {
-        const data = await response.json();
-        setDlsList(data);
+  // ✅ Fix Point 1: All Time Stats (Merged Card Logic)
+  const allTimeStats = useMemo(() => {
+    const totalInv = investments.reduce((sum, i) => sum + Number(i.amount || 0), 0);
+    const aadilInv = investments.filter(i => i.investor === 'Aadil').reduce((sum, i) => sum + Number(i.amount || 0), 0);
+    const imranInv = investments.filter(i => i.investor === 'Imran').reduce((sum, i) => sum + Number(i.amount || 0), 0);
+    
+    const totalDlsAll = dlsList.reduce((sum, d) => sum + Number(d.amount || 0), 0);
+    const totalExpAll = expenditures.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+    const netDlsAllTime = totalDlsAll - totalExpAll;
 
-        const currentMonthTotal = data
-          .filter((dls: DLS) => dls.month === selectedMonth && dls.year === selectedYear)
-          .reduce((sum: number, dls: DLS) => sum + dls.amount, 0);
+    return { totalInv, aadilInv, imranInv, netDlsAllTime, totalDlsAll, totalExpAll };
+  }, [investments, dlsList, expenditures]);
 
-        setCurrentMonthDLS(currentMonthTotal);
-      }
-    } catch (error) {
-      console.error('Error fetching DLS:', error);
+  // ✅ Fix Point 2: Monthly Performance Stats
+  const perfStats = useMemo(() => {
+    const earnings = milkSales.filter(s => {
+      const d = parseDateString(s.date);
+      if (perfMonth === 0) return d.year === perfYear;
+      return d.month === perfMonth && d.year === perfYear;
+    }).reduce((sum, s) => sum + Number(s.earnings || 0), 0);
+
+    const exp = expenditures.filter(e => {
+      const d = parseDateString(e.date);
+      if (perfMonth === 0) return d.year === perfYear;
+      return d.month === perfMonth && d.year === perfYear;
+    }).reduce((sum, e) => sum + Number(e.amount || 0), 0);
+
+    return { earnings, exp, net: earnings - exp };
+  }, [milkSales, expenditures, perfMonth, perfYear]);
+
+  // ✅ Fix Point 2: DLS Stats (Last Month vs Selected Month)
+  const dlsStats = useMemo(() => {
+    if (dlsFilterMonth === 0) {
+      // Default: Show Last Month Stats
+      const lastMonth = currentMonth === 1 ? 12 : currentMonth - 1;
+      const lastMonthYear = currentMonth === 1 ? currentYear - 1 : currentYear;
+
+      const totalDlsTillLastMonth = dlsList.filter(d => 
+        d.year < lastMonthYear || (d.year === lastMonthYear && d.month <= lastMonth)
+      ).reduce((sum, d) => sum + Number(d.amount || 0), 0);
+
+      const lastMonthDls = dlsList.filter(d => d.month === lastMonth && d.year === lastMonthYear).reduce((sum, d) => sum + Number(d.amount || 0), 0);
+      const lastMonthExp = expenditures.filter(e => {
+        const d = parseDateString(e.date);
+        return d.month === lastMonth && d.year === lastMonthYear;
+      }).reduce((sum, e) => sum + Number(e.amount || 0), 0);
+
+      return {
+        label1: 'Total (Till Last Month)', val1: totalDlsTillLastMonth,
+        label2: 'Last Month DLS', val2: lastMonthDls,
+        label3: 'Last Month Profit', val3: lastMonthDls - lastMonthExp
+      };
+    } else {
+      // Filter Applied: Show specific month stats
+      const currentMonthDls = dlsList.filter(d => d.month === dlsFilterMonth && d.year === dlsFilterYear).reduce((sum, d) => sum + Number(d.amount || 0), 0);
+      const currentMonthExp = expenditures.filter(e => {
+        const d = parseDateString(e.date);
+        return d.month === dlsFilterMonth && d.year === dlsFilterYear;
+      }).reduce((sum, e) => sum + Number(e.amount || 0), 0);
+
+      return {
+        label1: `Total in ${MONTHS[dlsFilterMonth-1]}`, val1: currentMonthDls,
+        label2: `${MONTHS[dlsFilterMonth-1]} DLS`, val2: currentMonthDls,
+        label3: `${MONTHS[dlsFilterMonth-1]} Profit`, val3: currentMonthDls - currentMonthExp
+      };
     }
-  };
-
-  const fetchEvents = async () => {
-    try {
-      const response = await fetch(`${BACKEND_URL}/api/events`);
-      if (response.ok) {
-        const data = await response.json();
-        setEvents(data);
-      }
-    } catch (error) {
-      console.error('Error fetching events:', error);
-    }
-  };
+  }, [dlsList, expenditures, dlsFilterMonth, dlsFilterYear, currentMonth, currentYear]);
 
   const calculateReminderDate = (eventDate: string, reminderType: string): string | undefined => {
     if (reminderType === 'none') return undefined;
-
     const date = new Date(eventDate);
     switch (reminderType) {
-      case '15_days':
-        date.setDate(date.getDate() - 15);
-        break;
-      case '1_month':
-        date.setMonth(date.getMonth() - 1);
-        break;
-      case '3_months':
-        date.setMonth(date.getMonth() - 3);
-        break;
-      case '6_months':
-        date.setMonth(date.getMonth() - 6);
-        break;
-      case '1_year':
-        date.setFullYear(date.getFullYear() - 1);
-        break;
-      default:
-        return undefined;
+      case '15_days': date.setDate(date.getDate() - 15); break;
+      case '1_month': date.setMonth(date.getMonth() - 1); break;
+      case '3_months': date.setMonth(date.getMonth() - 3); break;
+      case '6_months': date.setMonth(date.getMonth() - 6); break;
+      case '1_year': date.setFullYear(date.getFullYear() - 1); break;
+      default: return undefined;
     }
     return date.toISOString().split('T')[0];
   };
@@ -218,7 +249,7 @@ export default function DashboardScreen() {
         setEventDescription('');
         setSelectedDate('');
         setReminder('none');
-        fetchEvents();
+        fetchAllData();
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to add event');
@@ -227,22 +258,7 @@ export default function DashboardScreen() {
     }
   };
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    try {
-      await Promise.all([
-        fetchStats(),
-        fetchChartData(),
-        fetchDLS(),
-        fetchEvents()
-      ]);
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
+  // ✅ Fix Point 10: Logout fix (Hard route replace)
   const handleLogout = () => {
     Alert.alert('Logout', 'Are you sure you want to logout?', [
       { text: 'Cancel', style: 'cancel' },
@@ -251,6 +267,9 @@ export default function DashboardScreen() {
         style: 'destructive',
         onPress: async () => {
           await logout();
+          setTimeout(() => {
+            router.replace('/');
+          }, 100);
         },
       },
     ]);
@@ -259,7 +278,6 @@ export default function DashboardScreen() {
   const exportToPDF = async () => {
     try {
       setExporting(true);
-
       const html = `
 <!DOCTYPE html>
 <html>
@@ -272,22 +290,17 @@ export default function DashboardScreen() {
   </style>
 </head>
 <body>
-  <h1>🐄 Wazir Dairy Farming - Report (${selectedMonth}/${selectedYear})</h1>
+  <h1>🐄 Wazir Dairy Farming - Report</h1>
   <p>Generated on ${new Date().toLocaleDateString()}</p>
   
-  <h2>Total Investment</h2>
-  <p><strong>Total:</strong> ₹${(stats?.total_investment ?? 0).toLocaleString('en-IN')}</p>
-  <p><strong>Aadil:</strong> ₹${(stats?.aadil_investment ?? 0).toLocaleString('en-IN')}</p>
-  <p><strong>Imran:</strong> ₹${(stats?.imran_investment ?? 0).toLocaleString('en-IN')}</p>
+  <h2>Overall Stats (All Time)</h2>
+  <p><strong>Total Investment:</strong> ₹${allTimeStats.totalInv.toLocaleString('en-IN')}</p>
+  <p><strong>Total Net DLS:</strong> ₹${allTimeStats.netDlsAllTime.toLocaleString('en-IN')}</p>
   
-  <h2>Monthly Performance</h2>
-  <p><strong>Earnings:</strong> ₹${(stats?.total_earnings ?? 0).toLocaleString('en-IN')}</p>
-  <p><strong>Expenditure:</strong> ₹${(stats?.total_expenditure ?? 0).toLocaleString('en-IN')}</p>
-  <p><strong>Net Profit:</strong> ₹${(stats?.net_profit ?? 0).toLocaleString('en-IN')}</p>
-  
-  <h2>Dairy Lock Sales</h2>
-  <p><strong>Total:</strong> ₹${(stats?.total_dls ?? 0).toLocaleString('en-IN')}</p>
-  <p><strong>Current Month:</strong> ₹${currentMonthDLS.toLocaleString('en-IN')}</p>
+  <h2>Selected Performance (${perfMonth === 0 ? 'All Year' : MONTHS[perfMonth-1]} ${perfYear})</h2>
+  <p><strong>Earnings:</strong> ₹${perfStats.earnings.toLocaleString('en-IN')}</p>
+  <p><strong>Expenditure:</strong> ₹${perfStats.exp.toLocaleString('en-IN')}</p>
+  <p><strong>Net Profit:</strong> ₹${perfStats.net.toLocaleString('en-IN')}</p>
 </body>
 </html>
       `;
@@ -318,12 +331,10 @@ export default function DashboardScreen() {
 
   const filteredEvents = events.filter((event: any) => {
     const eventMonth = event.date.substring(0, 7);
-    const formattedSelectedMonthYear = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
+    const formattedSelectedMonthYear = `${calYear}-${String(calMonth).padStart(2, '0')}`;
     return eventMonth === formattedSelectedMonthYear;
   });
 
-  const netDLS = (stats?.total_dls || 0) - (stats?.total_expenditure || 0);
-  
   return (
     <ImageBackground source={BACKGROUND_IMAGE} style={styles.background} resizeMode="cover">
       <View style={styles.overlay}>
@@ -332,31 +343,7 @@ export default function DashboardScreen() {
           style={styles.container}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         >
-          <View style={styles.filterCard}>
-             <Text style={styles.filterLabel}>Performance Period:</Text>
-             <View style={styles.pickerRow}>
-                <View style={styles.pickerWrapper}>
-                  <Picker
-                    selectedValue={selectedMonth}
-                    onValueChange={(val) => setSelectedMonth(val)}
-                    style={styles.picker}
-                  >
-                    {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-                      .map((m, i) => <Picker.Item key={m} label={m} value={i + 1} />)}
-                  </Picker>
-                </View>
-                <View style={styles.pickerWrapper}>
-                  <Picker
-                    selectedValue={selectedYear}
-                    onValueChange={(val) => setSelectedYear(val)}
-                    style={styles.picker}
-                  >
-                    {[2024, 2025, 2026, 2027].map(y => <Picker.Item key={y} label={y.toString()} value={y} />)}
-                  </Picker>
-                </View>
-             </View>
-          </View>
-        
+          {/* Header */}
           <View style={styles.header}>
             <View>
               <Text style={styles.greeting}>Welcome back,</Text>
@@ -374,93 +361,139 @@ export default function DashboardScreen() {
             </View>
           </View>
 
-          <View style={styles.twoColumnRow}>
-            <View style={styles.halfCard}>
-              <Text style={styles.cardTitle} numberOfLines={1}>Total Investment</Text>
-              <Text style={styles.mainValue} adjustsFontSizeToFit minimumFontScale={0.6} numberOfLines={1}>
-                ₹{(stats?.total_investment ?? 0).toLocaleString('en-IN')}
-              </Text>
-              <View style={styles.divider} />
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel} numberOfLines={1}>Aadil</Text>
-                <Text style={styles.summaryValue} adjustsFontSizeToFit minimumFontScale={0.6} numberOfLines={1}>
-                  ₹{(stats?.aadil_investment ?? 0).toLocaleString('en-IN')}
+          {/* ✅ Point 1: Merged Card for All Time Investment & Net DLS */}
+          <View style={styles.card}>
+            <Text style={styles.cardTitleMerged}>Overall Dashboard (All Time)</Text>
+            <View style={styles.twoColumnRow}>
+              <View style={styles.halfCol}>
+                <Text style={styles.statLabelMerged}>Total Investment</Text>
+                <Text style={styles.mainValue} adjustsFontSizeToFit minimumFontScale={0.6} numberOfLines={1}>
+                  ₹{allTimeStats.totalInv.toLocaleString('en-IN')}
                 </Text>
               </View>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel} numberOfLines={1}>Imran</Text>
-                <Text style={styles.summaryValue} adjustsFontSizeToFit minimumFontScale={0.6} numberOfLines={1}>
-                  ₹{(stats?.imran_investment ?? 0).toLocaleString('en-IN')}
+              <View style={styles.halfCol}>
+                <Text style={styles.statLabelMerged}>Total DLS (Net)</Text>
+                <Text
+                  style={[styles.mainValue, allTimeStats.netDlsAllTime >= 0 ? styles.positiveValue : styles.negativeValue]}
+                  adjustsFontSizeToFit minimumFontScale={0.6} numberOfLines={1}
+                >
+                  ₹{allTimeStats.netDlsAllTime.toLocaleString('en-IN')}
                 </Text>
+                <Text style={styles.netDLSSubtext} numberOfLines={1}>Total DLS - Total Exp</Text>
               </View>
             </View>
-
-            <View style={styles.halfCard}>
-              <Text style={styles.cardTitle} numberOfLines={1}>Net DLS</Text>
-              <Text
-                style={[styles.mainValue, netDLS >= 0 ? styles.positiveValue : styles.negativeValue]}
-                adjustsFontSizeToFit minimumFontScale={0.6} numberOfLines={1}
-              >
-                ₹{netDLS.toLocaleString('en-IN')}
-              </Text>
-              <Text style={styles.netDLSSubtext} numberOfLines={1}>DLS - Expenditure</Text>
+            <View style={styles.divider} />
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel} numberOfLines={1}>Aadil Inv: ₹{allTimeStats.aadilInv.toLocaleString('en-IN')}</Text>
+              <Text style={styles.summaryLabel} numberOfLines={1}>Imran Inv: ₹{allTimeStats.imranInv.toLocaleString('en-IN')}</Text>
             </View>
           </View>
 
+          {/* ✅ Point 2: Monthly Performance Card with Internal Filter */}
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Monthly Performance</Text>
+            <View style={styles.pickerRowInner}>
+              <View style={styles.pickerWrapperInner}>
+                <Picker 
+                  selectedValue={perfMonth} 
+                  onValueChange={(val) => setPerfMonth(val)} 
+                  style={styles.picker} 
+                  itemStyle={styles.pickerItem}
+                >
+                  <Picker.Item label="All Year" value={0} color="#374151" />
+                  {MONTHS.map((m, i) => <Picker.Item key={m} label={m} value={i + 1} color="#374151" />)}
+                </Picker>
+              </View>
+              <View style={styles.pickerWrapperInner}>
+                <Picker 
+                  selectedValue={perfYear} 
+                  onValueChange={(val) => setPerfYear(val)} 
+                  style={styles.picker} 
+                  itemStyle={styles.pickerItem}
+                >
+                  {YEARS.map(y => <Picker.Item key={y} label={y.toString()} value={y} color="#374151" />)}
+                </Picker>
+              </View>
+            </View>
+
             <View style={styles.metricsRowAligned}>
               <View style={styles.metricItem}>
                 <Text style={styles.metricLabel} numberOfLines={1}>Earnings</Text>
                 <Text style={styles.metricValue} adjustsFontSizeToFit minimumFontScale={0.6} numberOfLines={1}>
-                  ₹{(stats?.total_earnings ?? 0).toLocaleString('en-IN')}
+                  ₹{perfStats.earnings.toLocaleString('en-IN')}
                 </Text>
               </View>
               <View style={styles.metricItem}>
                 <Text style={styles.metricLabel} numberOfLines={1}>Expenditure</Text>
                 <Text style={styles.metricValue} adjustsFontSizeToFit minimumFontScale={0.6} numberOfLines={1}>
-                  ₹{(stats?.total_expenditure ?? 0).toLocaleString('en-IN')}
+                  ₹{perfStats.exp.toLocaleString('en-IN')}
                 </Text>
               </View>
               <View style={styles.metricItem}>
                 <Text style={styles.metricLabel} numberOfLines={1}>Net Profit</Text>
                 <Text
-                  style={[styles.metricValue, (stats?.net_profit || 0) >= 0 ? styles.positiveValue : styles.negativeValue]}
+                  style={[styles.metricValue, perfStats.net >= 0 ? styles.positiveValue : styles.negativeValue]}
                   adjustsFontSizeToFit minimumFontScale={0.6} numberOfLines={1}
                 >
-                  ₹{(stats?.net_profit ?? 0).toLocaleString('en-IN')}
+                  ₹{perfStats.net.toLocaleString('en-IN')}
                 </Text>
               </View>
             </View>
           </View>
 
+          {/* ✅ Point 2: Dairy Lock Sales Card with Internal Filter */}
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Dairy Lock Sales</Text>
+            <View style={styles.pickerRowInner}>
+              <View style={styles.pickerWrapperInner}>
+                <Picker 
+                  selectedValue={dlsFilterMonth} 
+                  onValueChange={(val) => setDlsFilterMonth(val)} 
+                  style={styles.picker} 
+                  itemStyle={styles.pickerItem}
+                >
+                  <Picker.Item label="All Time (Default)" value={0} color="#374151" />
+                  {MONTHS.map((m, i) => <Picker.Item key={m} label={m} value={i + 1} color="#374151" />)}
+                </Picker>
+              </View>
+              <View style={styles.pickerWrapperInner}>
+                <Picker 
+                  selectedValue={dlsFilterYear} 
+                  onValueChange={(val) => setDlsFilterYear(val)} 
+                  style={styles.picker} 
+                  itemStyle={styles.pickerItem}
+                >
+                  {YEARS.map(y => <Picker.Item key={y} label={y.toString()} value={y} color="#374151" />)}
+                </Picker>
+              </View>
+            </View>
+
             <View style={styles.row}>
               <View style={styles.stat}>
-                <Text style={styles.statLabel} numberOfLines={1}>Total</Text>
+                <Text style={styles.statLabel} numberOfLines={1}>{dlsStats.label1}</Text>
                 <Text style={styles.dlsValue} adjustsFontSizeToFit minimumFontScale={0.6} numberOfLines={1}>
-                  ₹{(stats?.total_dls ?? 0).toLocaleString('en-IN')}
+                  ₹{dlsStats.val1.toLocaleString('en-IN')}
                 </Text>
               </View>
               <View style={styles.stat}>
-                <Text style={styles.statLabel} numberOfLines={1}>This Month</Text>
+                <Text style={styles.statLabel} numberOfLines={1}>{dlsStats.label2}</Text>
                 <Text style={styles.dlsMonthValue} adjustsFontSizeToFit minimumFontScale={0.6} numberOfLines={1}>
-                  ₹{currentMonthDLS.toLocaleString('en-IN')}
+                  ₹{dlsStats.val2.toLocaleString('en-IN')}
                 </Text>
               </View>
               <View style={styles.stat}>
-                <Text style={styles.statLabel} numberOfLines={1}>Monthly Profit</Text>
+                <Text style={styles.statLabel} numberOfLines={1}>{dlsStats.label3}</Text>
                 <Text
-                  style={[styles.dlsNetProfit, currentMonthDLS - (stats?.total_expenditure || 0) >= 0 ? styles.positiveValue : styles.negativeValue]}
+                  style={[styles.dlsNetProfit, dlsStats.val3 >= 0 ? styles.positiveValue : styles.negativeValue]}
                   adjustsFontSizeToFit minimumFontScale={0.6} numberOfLines={1}
                 >
-                  ₹{(currentMonthDLS - (stats?.total_expenditure || 0)).toLocaleString('en-IN')}
+                  ₹{dlsStats.val3.toLocaleString('en-IN')}
                 </Text>
               </View>
             </View>
           </View>
 
+          {/* Event Calendar Card */}
           <View style={styles.card}>
             <View style={styles.calendarHeader}>
               <Text style={styles.cardTitle}>Event Calendar</Text>
@@ -471,7 +504,6 @@ export default function DashboardScreen() {
                   if (!event.deleted) {
                     const isReminder = !!event.reminder;
                     const existing = acc[event.date];
-                    // Prioritize red dot if ANY event on this day is a reminder
                     const shouldBeRed = isReminder || (existing && existing.dotColor === '#EF4444');
                     
                     acc[event.date] = {
@@ -496,8 +528,8 @@ export default function DashboardScreen() {
                 setEventModalVisible(true);
               }}
               onMonthChange={(month: any) => {
-                setSelectedMonth(month.month);
-                setSelectedYear(month.year);
+                setCalMonth(month.month);
+                setCalYear(month.year);
               }}
               theme={{
                 selectedDayBackgroundColor: '#10B981',
@@ -508,7 +540,7 @@ export default function DashboardScreen() {
 
             <View style={styles.eventList}>
               <Text style={styles.eventListTitle} numberOfLines={1}>
-                Events - {new Date(selectedYear, selectedMonth - 1, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}
+                Events - {new Date(calYear, calMonth - 1, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}
               </Text>
               {filteredEvents.map((event: any) => (
                 <View key={event._id} style={styles.eventItem}>
@@ -528,7 +560,7 @@ export default function DashboardScreen() {
                         await fetch(`${BACKEND_URL}/api/events/${event._id}`, {
                           method: 'DELETE',
                         });
-                        fetchEvents();
+                        fetchAllData();
                       } catch (error) {
                         Alert.alert('Error', 'Failed to delete event');
                       }
@@ -547,7 +579,12 @@ export default function DashboardScreen() {
 
         <Modal visible={eventModalVisible} transparent animationType="slide">
           <View style={styles.modalOverlay}>
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.eventModalContent}>
+            {/* ✅ Fix Point 9: Added keyboardVerticalOffset */}
+            <KeyboardAvoidingView 
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+              style={styles.eventModalContent}
+              keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 20}
+            >
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>Add Event</Text>
                 <TouchableOpacity onPress={() => setEventModalVisible(false)}>
@@ -555,7 +592,7 @@ export default function DashboardScreen() {
                 </TouchableOpacity>
               </View>
 
-              <ScrollView>
+              <ScrollView showsVerticalScrollIndicator={false}>
                 <View style={styles.formGroup}>
                   <Text style={styles.label}>Date: {selectedDate || 'Select a date'}</Text>
                 </View>
@@ -567,6 +604,7 @@ export default function DashboardScreen() {
                     value={eventDescription}
                     onChangeText={(text) => setEventDescription(text.substring(0, 15))}
                     placeholder="e.g., Deworming"
+                    placeholderTextColor="#9CA3AF"
                     maxLength={15}
                   />
                 </View>
@@ -653,22 +691,6 @@ const styles = StyleSheet.create({
   logoutButton: {
     padding: 8,
   },
-  twoColumnRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 16,
-  },
-  halfCard: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
   card: {
     backgroundColor: '#fff',
     borderRadius: 12,
@@ -686,13 +708,30 @@ const styles = StyleSheet.create({
     color: '#374151',
     marginBottom: 10,
   },
+  cardTitleMerged: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  twoColumnRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  halfCol: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statLabelMerged: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginBottom: 4,
+  },
   mainValue: {
     fontSize: 22,
     fontWeight: '700',
     color: '#10B981',
-  },
-  noWrap: {
-    flexShrink: 0,
   },
   positiveValue: {
     color: '#10B981',
@@ -703,7 +742,7 @@ const styles = StyleSheet.create({
   netDLSSubtext: {
     fontSize: 11,
     color: '#9CA3AF',
-    marginTop: 6,
+    marginTop: 2,
   },
   divider: {
     height: 1,
@@ -712,43 +751,40 @@ const styles = StyleSheet.create({
   },
   summaryRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'space-around',
     alignItems: 'center',
-    marginBottom: 6,
   },
   summaryLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
-  summaryValue: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
-    color: '#1F2937',
+    color: '#374151',
   },
-  row: {
+  pickerRowInner: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginTop: 8,
+    gap: 10,
+    marginBottom: 16,
   },
-  stat: {
-    alignItems: 'center',
+  pickerWrapperInner: {
     flex: 1,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    backgroundColor: '#F9FAFB',
+    justifyContent: 'center',
   },
-  statLabel: {
-    fontSize: 11,
-    color: '#6B7280',
-    marginBottom: 4,
+  picker: {
+    height: 40,
+    width: '100%',
+    color: '#374151', // ✅ Fix Point 9
   },
-  statValue: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#111827',
+  pickerItem: {
+    color: '#374151',
+    fontSize: 14,
   },
   metricsRowAligned: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 12,
   },
   metricItem: {
     alignItems: 'center',
@@ -764,6 +800,20 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: '#1F2937',
+  },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  stat: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  statLabel: {
+    fontSize: 11,
+    color: '#6B7280',
+    marginBottom: 4,
+    textAlign: 'center',
   },
   dlsValue: {
     fontSize: 16,
@@ -867,7 +917,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     fontSize: 15,
-    color: '#1F2937',
+    color: '#374151', // ✅ Fix Point 9
   },
   reminderOptions: {
     flexDirection: 'row',
@@ -900,6 +950,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: 'center',
     marginTop: 8,
+    marginBottom: 20,
   },
   submitButtonDisabled: {
     backgroundColor: '#9CA3AF',
@@ -908,39 +959,5 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 15,
     fontWeight: '600',
-  },
-  filterCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  filterLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 10,
-  },
-  pickerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
-  pickerWrapper: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 8,
-    backgroundColor: '#F9FAFB',
-    justifyContent: 'center',
-  },
-  picker: {
-    height: 40,
-    width: '100%',
   },
 });
