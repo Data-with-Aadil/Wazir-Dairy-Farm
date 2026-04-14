@@ -662,7 +662,11 @@ export default function ExpenditureScreen() {
                 </TouchableOpacity>
               </View>
 
-              <ScrollView showsVerticalScrollIndicator={false}>
+              <ScrollView 
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 100 }}
+                keyboardShouldPersistTaps="handled"
+              >
                 <View style={styles.formGroup}>
                   <Text style={styles.label}>Amount (₹)</Text>
                   <TextInput
@@ -771,7 +775,11 @@ export default function ExpenditureScreen() {
                 </TouchableOpacity>
               </View>
 
-              <ScrollView showsVerticalScrollIndicator={false}>
+              <ScrollView 
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 100 }}
+                keyboardShouldPersistTaps="handled"
+              >
                 {billImage ? (
                   <View style={styles.imagePreviewContainer}>
                     <Image source={{ uri: billImage }} style={styles.imagePreview} resizeMode="cover" />
