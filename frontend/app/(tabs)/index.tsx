@@ -780,7 +780,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   picker: {
-    height: 40,
+    height: 50,
     width: '100%',
     color: '#374151', 
   },
@@ -916,15 +916,11 @@ const styles = StyleSheet.create({
     color: '#374151',
     marginBottom: 8,
   },
-  input: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    fontSize: 15,
-    color: '#374151', 
+  input: { 
+    backgroundColor: '#F9FAFB', borderRadius: 8, borderWidth: 1, 
+    borderColor: '#E5E7EB', paddingVertical: 12, paddingHorizontal: 16, 
+    fontSize: 16, color: '#374151',
+    minHeight: 50, /* ✅ Added minHeight */
   },
   reminderOptions: {
     flexDirection: 'row',
