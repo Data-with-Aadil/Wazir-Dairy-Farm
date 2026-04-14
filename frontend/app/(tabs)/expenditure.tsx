@@ -860,9 +860,21 @@ const styles = StyleSheet.create({
   activeTabText: { color: '#fff' },
   content: { flex: 1, paddingHorizontal: 16 },
   stickyContainer: { backgroundColor: 'rgba(255, 255, 255, 0.92)', paddingBottom: 10, paddingTop: 8 },
-  filterPickerContainer: { flex: 1, backgroundColor: '#fff', borderRadius: 10, height: 40, justifyContent: 'center', borderWidth: 1, borderColor: '#E5E7EB' },
-  pickerContainerInner: { backgroundColor: '#F9FAFB', borderRadius: 8, borderWidth: 1, borderColor: '#E5E7EB', overflow: 'hidden' },
-  picker: { height: 40, color: '#374151' },
+  filterPickerContainer: { 
+    flex: 1, backgroundColor: '#fff', borderRadius: 10, 
+    minHeight: 50, /* ✅ Changed from height: 40 */
+    justifyContent: 'center', borderWidth: 1, borderColor: '#E5E7EB' 
+  },
+  pickerContainerInner: { 
+    backgroundColor: '#F9FAFB', borderRadius: 8, borderWidth: 1, 
+    borderColor: '#E5E7EB', overflow: 'hidden',
+    minHeight: 50, /* ✅ Added minHeight */
+    justifyContent: 'center'
+  },
+  picker: { 
+    height: 50, /* ✅ Changed from 40 to 50 */
+    color: '#374151' 
+  },
   summaryCard: { backgroundColor: '#1F2937', borderRadius: 15, padding: 20 },
   summaryLabel: { color: '#9CA3AF', fontSize: 12 },
   grandTotal: { color: '#fff', fontSize: 28, fontWeight: 'bold', marginTop: 4 },
@@ -902,8 +914,18 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#1F2937' },
   formGroup: { marginBottom: 16 },
   label: { fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8 },
-  input: { backgroundColor: '#F9FAFB', borderRadius: 8, borderWidth: 1, borderColor: '#E5E7EB', paddingVertical: 12, paddingHorizontal: 16, fontSize: 16, color: '#374151' },
-  dateButton: { backgroundColor: '#F9FAFB', borderRadius: 8, borderWidth: 1, borderColor: '#E5E7EB', paddingVertical: 12, paddingHorizontal: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  input: { 
+    backgroundColor: '#F9FAFB', borderRadius: 8, borderWidth: 1, 
+    borderColor: '#E5E7EB', paddingVertical: 12, paddingHorizontal: 16, 
+    fontSize: 16, color: '#374151',
+    minHeight: 50, /* ✅ Added minHeight */
+  },
+  dateButton: { 
+    backgroundColor: '#F9FAFB', borderRadius: 8, borderWidth: 1, 
+    borderColor: '#E5E7EB', paddingVertical: 12, paddingHorizontal: 16, 
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    minHeight: 50, /* ✅ Added minHeight */
+  },
   dateButtonText: { fontSize: 16, color: '#1F2937' },
   submitButton: { backgroundColor: '#10B981', borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 8, marginBottom: 20 },
   submitButtonDisabled: { backgroundColor: '#9CA3AF' },
