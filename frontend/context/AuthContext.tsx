@@ -212,11 +212,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await AsyncStorage.removeItem('user');
       setUser(null);
-      // ✅ Expo Router को फोर्स करके सारे टैब्स क्लियर करना और रूट पर भेजना
-      while (router.canGoBack()) {
-        router.back();
-      }
-      router.replace('/');
+      // ✅ FIX: Removed the buggy router loop. Using timeout to ensure state clears first.
+      setTimeout(() => {
+        router.replace('/');
+      }, 100);
     } catch (error) {
       console.error("Logout error:", error);
     }
