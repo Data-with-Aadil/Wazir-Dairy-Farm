@@ -397,9 +397,9 @@ export default function InvestmentsScreen() {
           <View style={styles.modalOverlay}>
             {/* ✅ Fix Point 9: Keyboard offset added */}
             <KeyboardAvoidingView 
-              behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
-              style={styles.modalContent}
-              keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 20}
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
+              style={styles.eventModalContent}
+              {/* keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 20} */}
             >
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle} adjustsFontSizeToFit minimumFontScale={0.8} numberOfLines={1}>
