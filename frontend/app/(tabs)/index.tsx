@@ -27,7 +27,9 @@ const BACKGROUND_IMAGE = require('../../assets/images/0vjmy7gj_1000044672.jpg');
 const BACKEND_URL = "https://wazir-dairy-farm-1.onrender.com";
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const YEARS = [2024, 2025, 2026, 2027];
+const currentYearForArray = new Date().getFullYear();
+// यह 2024 से लेकर (Current Year + 2) तक का डायनामिक ऐरे बनाएगा
+const YEARS = Array.from({ length: (currentYearForArray + 2) - 2024 + 1 }, (_, i) => 2024 + i);
 
 // ✅ Bulletproof Date Parser (Fixes timezone 0 data bugs)
 const parseDateString = (dateStr: string) => {
