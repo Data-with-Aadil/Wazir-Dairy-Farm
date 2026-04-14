@@ -340,9 +340,9 @@ export default function DLSScreen() {
           <View style={styles.modalOverlay}>
             {/* ✅ Fix: KeyboardAvoidingView vertical offset for iOS/Android */}
             <KeyboardAvoidingView 
-              behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
-              style={styles.modalContent}
-              keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 20}
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
+              style={styles.eventModalContent}
+              {/* keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 20} */}
             >
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle} adjustsFontSizeToFit minimumFontScale={0.8} numberOfLines={1}>
