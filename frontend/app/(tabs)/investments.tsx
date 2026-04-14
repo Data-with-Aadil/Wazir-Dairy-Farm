@@ -23,6 +23,13 @@ import { useFocusEffect } from 'expo-router';
 const BACKGROUND_IMAGE = require('../../assets/images/0vjmy7gj_1000044672.jpg');
 const BACKEND_URL = "https://wazir-dairy-farm-1.onrender.com";
 
+// ✅ Dynamic Year Array (2024 to Current Year + 2)
+const currentYearForArray = new Date().getFullYear();
+const YEARS = Array.from(
+  { length: (currentYearForArray + 2) - 2024 + 1 }, 
+  (_, i) => 2024 + i
+);
+
 const CATEGORIES = [
   'Shed / Infrastructure',
   'Buffalo Purchase',
@@ -319,7 +326,7 @@ export default function InvestmentsScreen() {
                   style={styles.picker}
                 >
                   <Picker.Item label="All Time" value={0} color="#374151" />
-                  {[2024, 2025, 2026, 2027].map(y => <Picker.Item key={y} label={y.toString()} value={y} color="#374151" />)}
+                  {YEARS.map(y => <Picker.Item key={y} label={y.toString()} value={y} color="#374151" />)}
                 </Picker>
               </View>
             </View>
