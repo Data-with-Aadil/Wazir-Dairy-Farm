@@ -401,7 +401,11 @@ export default function MilkSalesScreen() {
                 </TouchableOpacity>
               </View>
 
-              <ScrollView showsVerticalScrollIndicator={false}>
+              <ScrollView 
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 100 }}
+                keyboardShouldPersistTaps="handled"
+              >
                 <View style={styles.formGroup}>
                   <Text style={styles.label}>Date</Text>
                   <TouchableOpacity onPress={() => setShowDatePicker(true)} style={styles.dateButton}>
