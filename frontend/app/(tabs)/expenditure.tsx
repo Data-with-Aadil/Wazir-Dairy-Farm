@@ -648,10 +648,10 @@ export default function ExpenditureScreen() {
         {/* Add/Edit Expenditure Modal */}
         <Modal visible={modalVisible} transparent animationType="slide">
           <View style={styles.modalOverlay}>
-            <KeyboardAvoidingView
-              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-              style={styles.modalContent}
-              keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 20}
+            <KeyboardAvoidingView 
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
+              style={styles.eventModalContent}
+              {/* keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 20} */}
             >
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>
@@ -759,10 +759,10 @@ export default function ExpenditureScreen() {
         {/* Upload Bill Modal */}
         <Modal visible={billModalVisible} transparent animationType="slide">
           <View style={styles.modalOverlay}>
-            <KeyboardAvoidingView
-              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-              style={styles.modalContent}
-              keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 20}
+            <KeyboardAvoidingView 
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
+              style={styles.eventModalContent}
+              {/* keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 20} */}
             >
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>Upload Bill</Text>
