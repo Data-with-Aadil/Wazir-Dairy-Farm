@@ -353,7 +353,11 @@ export default function DLSScreen() {
                 </TouchableOpacity>
               </View>
 
-              <ScrollView showsVerticalScrollIndicator={false}>
+              <ScrollView 
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 100 }}
+                keyboardShouldPersistTaps="handled"
+              >
                 <View style={styles.formGroup}>
                   <Text style={styles.label}>Month</Text>
                   <View style={styles.pickerContainerInner}>
