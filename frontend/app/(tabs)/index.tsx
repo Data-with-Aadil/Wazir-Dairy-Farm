@@ -580,9 +580,9 @@ export default function DashboardScreen() {
         <Modal visible={eventModalVisible} transparent animationType="slide">
           <View style={styles.modalOverlay}>
             <KeyboardAvoidingView 
-              behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
               style={styles.eventModalContent}
-              keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 20}
+              {/* keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 20} */}
             >
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>Add Event</Text>
