@@ -1,6 +1,8 @@
 # 🐄 Wazir Dairy Farm App – COMPLETE ENGINEERING PLAYBOOK
 
 ---
+to run the app in local fast:- npx expo start -c
+also, remember that ki bhai apun ne naah..expo swagger /docs pe jaa kr users ko run kiya tha to make sure users are created by hard run...
 
 # 🧠 0. Journey Summary (Context)
 
