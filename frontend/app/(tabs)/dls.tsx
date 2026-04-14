@@ -492,25 +492,20 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     paddingTop: 8,
   },
-  pickerContainer: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    height: 40,
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+  pickerContainer: { 
+    flex: 1, backgroundColor: '#fff', borderRadius: 10, 
+    minHeight: 50, /* ✅ Changed from height: 40 */
+    justifyContent: 'center', borderWidth: 1, borderColor: '#E5E7EB' 
   },
-  pickerContainerInner: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    overflow: 'hidden',
+  pickerContainerInner: { 
+    backgroundColor: '#F9FAFB', borderRadius: 8, borderWidth: 1, 
+    borderColor: '#E5E7EB', overflow: 'hidden',
+    minHeight: 50, /* ✅ Added minHeight */
+    justifyContent: 'center'
   },
-  picker: {
-    height: 40,
-    color: '#374151',
+  picker: { 
+    height: 50, /* ✅ Changed from 40 to 50 */
+    color: '#374151' 
   },
   summaryCard: {
     backgroundColor: '#1F2937',
@@ -645,26 +640,17 @@ const styles = StyleSheet.create({
     color: '#374151',
     marginBottom: 8,
   },
-  input: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    fontSize: 15,
-    color: '#374151', 
+  input: { 
+    backgroundColor: '#F9FAFB', borderRadius: 8, borderWidth: 1, 
+    borderColor: '#E5E7EB', paddingVertical: 12, paddingHorizontal: 16, 
+    fontSize: 16, color: '#374151',
+    minHeight: 50, /* ✅ Added minHeight */
   },
-  dateButton: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  dateButton: { 
+    backgroundColor: '#F9FAFB', borderRadius: 8, borderWidth: 1, 
+    borderColor: '#E5E7EB', paddingVertical: 12, paddingHorizontal: 16, 
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    minHeight: 50, /* ✅ Added minHeight */
   },
   dateButtonText: {
     fontSize: 15,
