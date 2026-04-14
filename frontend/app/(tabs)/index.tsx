@@ -394,7 +394,7 @@ export default function DashboardScreen() {
               <View style={styles.pickerWrapperInner}>
                 <Picker 
                   selectedValue={perfMonth} 
-                  onValueChange={(val) => setSelectedMonth(val)} 
+                  onValueChange={(val) => setPerfMonth(Number(val))} 
                   style={styles.picker} 
                   itemStyle={styles.pickerItem}
                 >
@@ -405,7 +405,7 @@ export default function DashboardScreen() {
               <View style={styles.pickerWrapperInner}>
                 <Picker 
                   selectedValue={perfYear} 
-                  onValueChange={(val) => setPerfYear(val)} 
+                  onValueChange={(val) => setPerfYear(Number(val))} 
                   style={styles.picker} 
                   itemStyle={styles.pickerItem}
                 >
