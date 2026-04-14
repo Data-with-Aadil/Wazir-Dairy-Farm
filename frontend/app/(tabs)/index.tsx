@@ -446,7 +446,7 @@ export default function DashboardScreen() {
               <View style={styles.pickerWrapperInner}>
                 <Picker 
                   selectedValue={dlsFilterMonth} 
-                  onValueChange={(val) => setDlsFilterMonth(val)} 
+                  onValueChange={(val) => setDlsFilterMonth(Number(val))} 
                   style={styles.picker} 
                   itemStyle={styles.pickerItem}
                 >
@@ -457,7 +457,7 @@ export default function DashboardScreen() {
               <View style={styles.pickerWrapperInner}>
                 <Picker 
                   selectedValue={dlsFilterYear} 
-                  onValueChange={(val) => setDlsFilterYear(val)} 
+                  onValueChange={(val) => setDlsFilterYear(Number(val))} 
                   style={styles.picker} 
                   itemStyle={styles.pickerItem}
                 >
