@@ -3,7 +3,7 @@ Auto Email Reports Module - Sends daily dashboard stats via Resend
 """
 
 import httpx
-from datetime import datetime, timedelta
+from datetime import datetime
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import pytz
@@ -16,66 +16,59 @@ SENDER_EMAIL = "onboarding@resend.dev"
 # Timezone Configuration
 IST = pytz.timezone('Asia/Kolkata')
 
-# MongoDB connection (Matches server.py logic)
+# MongoDB connection
 MONGO_URL = os.getenv("MONGO_URL", "mongodb://localhost:27017")
 DB_NAME = os.getenv("DB_NAME", "wazir_dairy")
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
 
 async def fetch_dashboard_stats():
-    """Fetch aggregated dashboard statistics using IST timezone logic"""
+    """Fetch statistics mirroring exactly the Frontend Dashboard logic"""
     try:
-        # Get today's date range in IST
         now_ist = datetime.now(IST)
-        today_start = now_ist.replace(hour=0, minute=0, second=0, microsecond=0)
-        tomorrow_start = today_start + timedelta(days=1)
+        current_month = now_ist.month
+        current_year = now_ist.year
 
-        # ISO strings for MongoDB filtering
-        start_str = today_start.isoformat()
-        end_str = tomorrow_start.isoformat()
+        # Fetch ALL non-deleted records
+        expenditures = await db.expenditures.find({"deleted": {"$ne": True}}).to_list(None)
+        investments = await db.investments.find({"deleted": {"$ne": True}}).to_list(None)
+        milk_sales = await db.milk_sales.find({"deleted": {"$ne": True}}).to_list(None)
+        dls_records = await db.dls.find({"deleted": {"$ne": True}}).to_list(None)
 
-        # Fetch collections
-        expenditures = await db.expenditures.find({
-            "date": {"$gte": start_str, "$lt": end_str},
-            "deleted": {"$ne": True}
-        }).to_list(1000)
+        # 1. OVERALL DASHBOARD (ALL TIME)
+        total_expenditure_all = sum(float(e.get("amount", 0)) for e in expenditures)
+        total_investment_all = sum(float(i.get("amount", 0)) for i in investments)
+        total_dls_all = sum(float(d.get("amount", 0)) for d in dls_records)
+        net_dls_all = total_dls_all - total_expenditure_all
 
-        investments = await db.investments.find({
-            "date": {"$gte": start_str, "$lt": end_str},
-            "deleted": {"$ne": True}
-        }).to_list(1000)
+        # 2. MONTHLY PERFORMANCE (CURRENT MONTH)
+        current_month_exp = 0
+        current_month_earnings = 0
 
-        # Note: Milk sales uses 'earnings' field for the amount
-        milk_sales = await db.milk_sales.find({
-            "date": {"$gte": start_str, "$lt": end_str},
-            "deleted": {"$ne": True}
-        }).to_list(1000)
+        for e in expenditures:
+            date_str = e.get("date", "")
+            if date_str:
+                parts = date_str.split('-')
+                if len(parts) >= 2 and int(parts[0]) == current_year and int(parts[1]) == current_month:
+                    current_month_exp += float(e.get("amount", 0))
 
-        dls_records = await db.dls.find({
-            "date": {"$gte": start_str, "$lt": end_str},
-            "deleted": {"$ne": True}
-        }).to_list(1000)
+        for m in milk_sales:
+            date_str = m.get("date", "")
+            if date_str:
+                parts = date_str.split('-')
+                if len(parts) >= 2 and int(parts[0]) == current_year and int(parts[1]) == current_month:
+                    current_month_earnings += float(m.get("earnings", 0))
 
-        # Calculate totals
-        total_expenditure = sum(float(e.get("amount", 0)) for e in expenditures)
-        total_investment = sum(float(i.get("amount", 0)) for i in investments)
-        total_milk_sales = sum(float(m.get("earnings", 0)) for m in milk_sales)
-        total_dls = sum(float(d.get("amount", 0)) for d in dls_records)
-
-        # Net DLS calculation
-        net_dls = total_dls - total_expenditure
+        net_profit_month = current_month_earnings - current_month_exp
 
         return {
-            "date": today_start.strftime("%d %B %Y"),
-            "total_dls": total_dls,
-            "total_expenditure": total_expenditure,
-            "total_investment": total_investment,
-            "total_milk_sales": total_milk_sales,
-            "net_dls": net_dls,
-            "expenditure_count": len(expenditures),
-            "investment_count": len(investments),
-            "milk_sales_count": len(milk_sales),
-            "dls_count": len(dls_records)
+            "date": now_ist.strftime("%d %B %Y"),
+            "month_name": now_ist.strftime("%B %Y"),
+            "total_investment": total_investment_all,
+            "net_dls_all": net_dls_all,
+            "current_month_earnings": current_month_earnings,
+            "current_month_exp": current_month_exp,
+            "net_profit_month": net_profit_month
         }
 
     except Exception as e:
@@ -83,9 +76,13 @@ async def fetch_dashboard_stats():
         return None
 
 def generate_html_report(stats):
-    """Generate HTML email template with dashboard stats"""
+    """Generate HTML email template matching the App Dashboard"""
     if not stats:
         return "<p>Unable to fetch dashboard statistics.</p>"
+
+    # Formatting colors for negative values
+    net_dls_color = "#10B981" if stats['net_dls_all'] >= 0 else "#EF4444"
+    net_profit_color = "#10B981" if stats['net_profit_month'] >= 0 else "#EF4444"
 
     html = f"""
     <!DOCTYPE html>
@@ -93,53 +90,52 @@ def generate_html_report(stats):
     <head>
         <style>
             body {{ font-family: Arial, sans-serif; background-color: #f9fafb; padding: 20px; }}
-            .container {{ max-width: 600px; margin: 0 auto; background: white; border-radius: 8px; padding: 24px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
-            h1 {{ color: #1f2937; font-size: 24px; margin-bottom: 8px; }}
-            .date {{ color: #6b7280; font-size: 14px; margin-bottom: 24px; }}
-            .stat-card {{ background: #f3f4f6; border-radius: 6px; padding: 16px; margin-bottom: 12px; }}
-            .stat-label {{ color: #6b7280; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }}
-            .stat-value {{ color: #1f2937; font-size: 28px; font-weight: bold; margin-top: 4px; }}
-            .stat-count {{ color: #9ca3af; font-size: 12px; margin-top: 4px; }}
-            .net-dls {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }}
-            .footer {{ text-align: center; margin-top: 24px; color: #9ca3af; font-size: 12px; }}
+            .container {{ max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; padding: 24px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }}
+            h1 {{ color: #1f2937; font-size: 22px; text-align: center; margin-bottom: 4px; }}
+            .date {{ color: #6b7280; font-size: 14px; text-align: center; margin-bottom: 24px; }}
+            .section-title {{ color: #374151; font-size: 16px; font-weight: bold; margin-top: 20px; margin-bottom: 12px; border-bottom: 2px solid #e5e7eb; padding-bottom: 6px; }}
+            .row {{ display: flex; justify-content: space-between; margin-bottom: 12px; }}
+            .card {{ background: #f3f4f6; border-radius: 8px; padding: 16px; flex: 1; margin: 0 4px; text-align: center; }}
+            .label {{ color: #6b7280; font-size: 12px; margin-bottom: 4px; font-weight: 600; text-transform: uppercase; }}
+            .value {{ color: #1f2937; font-size: 20px; font-weight: bold; }}
+            .footer {{ text-align: center; margin-top: 30px; color: #9ca3af; font-size: 12px; }}
         </style>
     </head>
     <body>
         <div class="container">
-            <h1>🐄 Wazir Dairy Farm - Daily Report</h1>
-            <p class="date">{stats['date']}</p>
+            <h1>🐄 Wazir Dairy Farm</h1>
+            <p class="date">Daily Report - {stats['date']}</p>
 
-            <div class="stat-card net-dls">
-                <div class="stat-label">Net DLS (DLS - Expenditure)</div>
-                <div class="stat-value" style="color: white;">₹{stats['net_dls']:,.2f}</div>
+            <div class="section-title">Overall Dashboard (All Time)</div>
+            <div class="row">
+                <div class="card">
+                    <div class="label">Total Investment</div>
+                    <div class="value">₹{stats['total_investment']:,.2f}</div>
+                </div>
+                <div class="card">
+                    <div class="label">Total DLS (Net)</div>
+                    <div class="value" style="color: {net_dls_color};">₹{stats['net_dls_all']:,.2f}</div>
+                </div>
             </div>
 
-            <div class="stat-card">
-                <div class="stat-label">💰 Total DLS</div>
-                <div class="stat-value">₹{stats['total_dls']:,.2f}</div>
-                <div class="stat-count">{stats['dls_count']} entries</div>
-            </div>
-
-            <div class="stat-card">
-                <div class="stat-label">🥛 Milk Sales</div>
-                <div class="stat-value">₹{stats['total_milk_sales']:,.2f}</div>
-                <div class="stat-count">{stats['milk_sales_count']} sales</div>
-            </div>
-
-            <div class="stat-card">
-                <div class="stat-label">📤 Expenditure</div>
-                <div class="stat-value">₹{stats['total_expenditure']:,.2f}</div>
-                <div class="stat-count">{stats['expenditure_count']} expenses</div>
-            </div>
-
-            <div class="stat-card">
-                <div class="stat-label">📈 Investment</div>
-                <div class="stat-value">₹{stats['total_investment']:,.2f}</div>
-                <div class="stat-count">{stats['investment_count']} investments</div>
+            <div class="section-title">Monthly Performance ({stats['month_name']})</div>
+            <div class="row">
+                <div class="card">
+                    <div class="label">Earnings</div>
+                    <div class="value">₹{stats['current_month_earnings']:,.2f}</div>
+                </div>
+                <div class="card">
+                    <div class="label">Expenditure</div>
+                    <div class="value">₹{stats['current_month_exp']:,.2f}</div>
+                </div>
+                <div class="card">
+                    <div class="label">Net Profit</div>
+                    <div class="value" style="color: {net_profit_color};">₹{stats['net_profit_month']:,.2f}</div>
+                </div>
             </div>
 
             <div class="footer">
-                <p>Generated automatically by Wazir Dairy Farm App</p>
+                <p>This is an automated report generated by the Wazir Dairy Farm System.</p>
             </div>
         </div>
     </body>
@@ -153,34 +149,31 @@ async def send_daily_report():
         now_ist = datetime.now(IST)
         print(f"[{now_ist}] Starting daily email report process...")
 
-        # Fetch stats
         stats = await fetch_dashboard_stats()
         if not stats:
             print("Failed to fetch stats. Skipping email.")
             return
 
-        # Generate HTML
         html_content = generate_html_report(stats)
 
-        # Send email via Resend
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 "https://api.resend.com/emails",
-                headers={
+                headers={{
                     "Authorization": f"Bearer {RESEND_API_KEY}",
                     "Content-Type": "application/json"
-                },
-                json={
+                }},
+                json={{
                     "from": SENDER_EMAIL,
                     "to": RECIPIENT_EMAILS,
                     "subject": f"📊 Daily Report - {stats['date']}",
                     "html": html_content
-                },
+                }},
                 timeout=30.0
             )
 
             if response.status_code == 200:
-                print(f"✅ Email sent successfully to {len(RECIPIENT_EMAILS)} recipients")
+                print(f"✅ Email sent successfully")
             else:
                 print(f"❌ Email failed: {response.status_code} - {response.text}")
 
