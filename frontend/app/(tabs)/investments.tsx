@@ -399,7 +399,6 @@ export default function InvestmentsScreen() {
             <KeyboardAvoidingView 
               behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
               style={styles.eventModalContent}
-              {/* keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 20} */}
             >
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle} adjustsFontSizeToFit minimumFontScale={0.8} numberOfLines={1}>
