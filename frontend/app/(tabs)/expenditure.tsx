@@ -357,7 +357,7 @@ export default function ExpenditureScreen() {
 
     setLoading(true);
     try {
-      const response = await fetch(${BACKEND_URL}/api/expenditures?user=${user?.name}, {
+      const response = await fetch(`${BACKEND_URL}/api/expenditures?user=${user?.name}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
