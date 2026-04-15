@@ -783,7 +783,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   picker: {
-    height: 50,
+    height: 60,
     width: '100%',
     color: '#374151', 
   },
