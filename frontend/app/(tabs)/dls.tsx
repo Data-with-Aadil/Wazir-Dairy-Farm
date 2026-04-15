@@ -131,7 +131,7 @@ export default function DLSScreen() {
 
     setLoading(true);
     try {
-      const response = await fetch(`${BACKEND_URL}/api/dairy-lock-sales`, {
+      const response = await fetch(`${BACKEND_URL}/api/dairy-lock-sales?user=${user?.name}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
