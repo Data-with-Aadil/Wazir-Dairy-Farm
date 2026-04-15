@@ -267,7 +267,7 @@ export default function ExpenditureScreen() {
         billData.amount = 0; 
       }
 
-      const response = await fetch(`${BACKEND_URL}/api/bills`, {
+      const response = await fetch(`${BACKEND_URL}/api/bills?user=${user?.name}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(billData),
