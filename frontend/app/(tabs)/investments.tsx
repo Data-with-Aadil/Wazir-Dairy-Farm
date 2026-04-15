@@ -514,7 +514,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center'
   },
   picker: { 
-    height: 50, /* ✅ Changed from 40 to 50 */
+    height: 60, /* ✅ Changed from 40 to 50 */
     color: '#374151' 
   },
   summaryCard: { backgroundColor: '#1F2937', borderRadius: 15, padding: 20 },
