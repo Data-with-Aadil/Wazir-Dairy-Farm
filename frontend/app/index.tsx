@@ -12,12 +12,13 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { router } from 'expo-router';
 
-const BACKGROUND_IMAGE = 'https://customer-assets.emergentagent.com/job_2ded3f0f-8937-48e9-9afe-e862fe69dea1/artifacts/0vjmy7gj_1000044672.jpg';
+// FEEDBACK #2: Updated to use local image path
+const BACKGROUND_IMAGE = require('../assets/images/0vjmy7gj_1000044672.jpg');
 
 export default function LoginScreen() {
   const { user, login, isLoading } = useAuth();
-  const [selectedUser, setSelectedUser] = useState<string>('');
-  const [pin, setPin] = useState<string>('');
+  const [selectedUser, setSelectedUser] = useState('');
+  const [pin, setPin] = useState('');
   const [loggingIn, setLoggingIn] = useState(false);
 
   useEffect(() => {
@@ -57,21 +58,18 @@ export default function LoginScreen() {
   }
 
   return (
-    <ImageBackground
-      source={{ uri: BACKGROUND_IMAGE }}
-      style={styles.background}
-      blurRadius={3}
-    >
+    <ImageBackground source={BACKGROUND_IMAGE} style={styles.background} resizeMode="cover">
       <View style={styles.overlay}>
         <View style={styles.container}>
           <View style={styles.header}>
             <Text style={styles.title}>Wazir Dairy Farming</Text>
-            <Text style={styles.subtitle}>Premium Quality | Pure Buffalo Milk</Text>
+            {/* FEEDBACK #1: Updated subtitle */}
+            <Text style={styles.subtitle}>Premium Quality Dairy Products</Text>
           </View>
 
           <View style={styles.loginCard}>
             <Text style={styles.loginTitle}>Select User</Text>
-            
+
             <View style={styles.userButtons}>
               <TouchableOpacity
                 style={[
@@ -112,23 +110,19 @@ export default function LoginScreen() {
               <Text style={styles.pinLabel}>Enter 4-Digit PIN</Text>
               <TextInput
                 style={styles.pinInput}
+                placeholder="••••"
+                secureTextEntry
+                keyboardType="numeric"
+                maxLength={4}
                 value={pin}
                 onChangeText={setPin}
-                keyboardType="number-pad"
-                maxLength={4}
-                secureTextEntry
-                placeholder="••••"
-                placeholderTextColor="#9CA3AF"
               />
             </View>
 
             <TouchableOpacity
-              style={[
-                styles.loginButton,
-                (!selectedUser || pin.length !== 4) && styles.loginButtonDisabled,
-              ]}
+              style={styles.loginButton}
               onPress={handleLogin}
-              disabled={!selectedUser || pin.length !== 4 || loggingIn}
+              disabled={loggingIn}
             >
               {loggingIn ? (
                 <ActivityIndicator color="#fff" />

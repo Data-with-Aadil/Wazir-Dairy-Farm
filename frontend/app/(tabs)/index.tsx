@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,8 @@ import {
   Dimensions,
   Modal,
   TextInput,
+  Platform,
+  KeyboardAvoidingView,
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,21 +21,25 @@ import { useAuth } from '../../context/AuthContext';
 import { router, useFocusEffect } from 'expo-router';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import { Picker } from '@react-native-picker/picker'; 
 
-const BACKGROUND_IMAGE = {
-  uri: "https://customer-assets.emergentagent.com/job_2ded3f0f-8937-48e9-9afe-e862fe69dea1/artifacts/0vjmy7gj_1000044672.jpg"
+const BACKGROUND_IMAGE = require('../../assets/images/0vjmy7gj_1000044672.jpg');
+const BACKEND_URL = "https://wazir-dairy-farm-1.onrender.com";
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const currentYearForArray = new Date().getFullYear();
+// यह 2024 से लेकर (Current Year + 2) तक का डायनामिक ऐरे बनाएगा
+const YEARS = Array.from({ length: (currentYearForArray + 2) - 2024 + 1 }, (_, i) => 2024 + i);
+
+// ✅ Bulletproof Date Parser (Fixes timezone 0 data bugs)
+const parseDateString = (dateStr: string) => {
+  if (!dateStr) return { month: 0, year: 0 };
+  const parts = dateStr.split('-');
+  if (parts.length >= 2) {
+    return { year: parseInt(parts[0], 10), month: parseInt(parts[1], 10) };
+  }
+  return { month: 0, year: 0 };
 };
-const BACKEND_URL = "https://wazir-dairy-farm.onrender.com";
-
-interface DashboardStats {
-  total_investment: number;
-  aadil_investment: number;
-  imran_investment: number;
-  total_earnings: number;
-  total_expenditure: number;
-  net_profit: number;
-  total_dls: number;
-}
 
 interface MilkSale {
   date: string;
@@ -52,114 +58,170 @@ interface DLS {
   year: number;
 }
 
+interface Investment {
+  date: string;
+  amount: number;
+  investor: string;
+}
+
 const screenWidth = Dimensions.get('window').width;
 
 export default function DashboardScreen() {
-  const { user, logout } = useAuth();
-  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const { user, logout, isLoading } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
+  
+  // Local Data States
+  const [investments, setInvestments] = useState<Investment[]>([]);
   const [milkSales, setMilkSales] = useState<MilkSale[]>([]);
   const [expenditures, setExpenditures] = useState<Expenditure[]>([]);
   const [dlsList, setDlsList] = useState<DLS[]>([]);
-  const [currentMonthDLS, setCurrentMonthDLS] = useState(0);
-  const [exporting, setExporting] = useState(false);
   const [events, setEvents] = useState<any[]>([]);
+  
+  // Modals & UI States
+  const [exporting, setExporting] = useState(false);
   const [eventModalVisible, setEventModalVisible] = useState(false);
   const [selectedDate, setSelectedDate] = useState('');
   const [eventDescription, setEventDescription] = useState('');
+  const [reminder, setReminder] = useState('none');
   const [addingEvent, setAddingEvent] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  // Internal Filters States
+  const currentDate = new Date();
+  const currentMonth = currentDate.getMonth() + 1;
+  const currentYear = currentDate.getFullYear();
+
+  const [perfMonth, setPerfMonth] = useState(currentMonth);
+  const [perfYear, setPerfYear] = useState(currentYear);
+  
+  const [dlsFilterMonth, setDlsFilterMonth] = useState(0); // 0 = All Time
+  const [dlsFilterYear, setDlsFilterYear] = useState(currentYear);
+  
+  const [calMonth, setCalMonth] = useState(currentMonth);
+  const [calYear, setCalYear] = useState(currentYear);
+
   const scrollViewRef = React.useRef<ScrollView>(null);
 
-  // Scroll to top when tab is focused
+  useEffect(() => {
+    if (!isLoading && !user) {
+      router.replace('/');
+    }
+  }, [user, isLoading]);
+
   useFocusEffect(
     React.useCallback(() => {
-      scrollViewRef.current?.scrollTo({ y: 0, animated: false });
-      // Also refresh data when dashboard is focused
-      fetchStats();
-      fetchChartData();
-      fetchDLS();
-      fetchEvents();
+      fetchAllData();
     }, [])
   );
 
-  useEffect(() => {
-    setupUsers();
-  }, []);
-
-  const setupUsers = async () => {
+  const fetchAllData = async () => {
     try {
-      await fetch(`${BACKEND_URL}/api/auth/setup`, { method: 'POST' });
-    } catch (error) {
-      console.error('Setup error:', error);
-    }
-  };
-
-  const fetchStats = async () => {
-    try {
-      const response = await fetch(`${BACKEND_URL}/api/stats/dashboard`);
-      if (response.ok) {
-        const data = await response.json();
-        setStats(data);
-      }
-    } catch (error) {
-      console.error('Error fetching stats:', error);
-    }
-  };
-
-  const fetchChartData = async () => {
-    try {
-      const [salesRes, expendRes] = await Promise.all([
+      const [invRes, salesRes, expRes, dlsRes, eventsRes] = await Promise.all([
+        fetch(`${BACKEND_URL}/api/investments`),
         fetch(`${BACKEND_URL}/api/milk-sales`),
         fetch(`${BACKEND_URL}/api/expenditures`),
+        fetch(`${BACKEND_URL}/api/dairy-lock-sales`),
+        fetch(`${BACKEND_URL}/api/events`)
       ]);
 
-      if (salesRes.ok) {
-        const salesData = await salesRes.json();
-        setMilkSales(salesData);
-      }
-
-      if (expendRes.ok) {
-        const expendData = await expendRes.json();
-        setExpenditures(expendData);
-      }
+      if (invRes.ok) setInvestments(await invRes.json());
+      if (salesRes.ok) setMilkSales(await salesRes.json());
+      if (expRes.ok) setExpenditures(await expRes.json());
+      if (dlsRes.ok) setDlsList(await dlsRes.json());
+      if (eventsRes.ok) setEvents(await eventsRes.json());
     } catch (error) {
-      console.error('Error fetching chart data:', error);
+      console.error('Error fetching data:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  const fetchDLS = async () => {
-    try {
-      const response = await fetch(`${BACKEND_URL}/api/dairy-lock-sales`);
-      if (response.ok) {
-        const data = await response.json();
-        setDlsList(data);
-
-        // Calculate current month DLS
-        const now = new Date();
-        const currentMonth = now.getMonth() + 1;
-        const currentYear = now.getFullYear();
-
-        const currentMonthTotal = data
-          .filter((dls: DLS) => dls.month === currentMonth && dls.year === currentYear)
-          .reduce((sum: number, dls: DLS) => sum + dls.amount, 0);
-
-        setCurrentMonthDLS(currentMonthTotal);
-      }
-    } catch (error) {
-      console.error('Error fetching DLS:', error);
-    }
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchAllData();
   };
 
-  const fetchEvents = async () => {
-    try {
-      const response = await fetch(`${BACKEND_URL}/api/events`);
-      if (response.ok) {
-        const data = await response.json();
-        setEvents(data);
-      }
-    } catch (error) {
-      console.error('Error fetching events:', error);
+  // 1. ALL TIME STATS
+  const allTimeStats = useMemo(() => {
+    const totalInv = investments.reduce((sum, i) => sum + Number(i.amount || 0), 0);
+    const aadilInv = investments.filter(i => i.investor === 'Aadil').reduce((sum, i) => sum + Number(i.amount || 0), 0);
+    const imranInv = investments.filter(i => i.investor === 'Imran').reduce((sum, i) => sum + Number(i.amount || 0), 0);
+    
+    const totalDlsAll = dlsList.reduce((sum, d) => sum + Number(d.amount || 0), 0);
+    const totalExpAll = expenditures.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+    const netDlsAllTime = totalDlsAll - totalExpAll;
+
+    return { totalInv, aadilInv, imranInv, netDlsAllTime, totalDlsAll, totalExpAll };
+  }, [investments, dlsList, expenditures]);
+
+  // 2. MONTHLY PERFORMANCE STATS (Uses safe parseDateString)
+  const perfStats = useMemo(() => {
+    const earnings = milkSales.filter(s => {
+      const d = parseDateString(s.date);
+      if (perfMonth === 0) return d.year === perfYear;
+      return d.month === perfMonth && d.year === perfYear;
+    }).reduce((sum, s) => sum + Number(s.earnings || 0), 0);
+
+    const exp = expenditures.filter(e => {
+      const d = parseDateString(e.date);
+      if (perfMonth === 0) return d.year === perfYear;
+      return d.month === perfMonth && d.year === perfYear;
+    }).reduce((sum, e) => sum + Number(e.amount || 0), 0);
+
+    return { earnings, exp, net: earnings - exp };
+  }, [milkSales, expenditures, perfMonth, perfYear]);
+
+  // 3. DAIRY LOCK SALES STATS
+  const dlsStats = useMemo(() => {
+    if (dlsFilterMonth === 0) {
+      const lastMonth = currentMonth === 1 ? 12 : currentMonth - 1;
+      const lastMonthYear = currentMonth === 1 ? currentYear - 1 : currentYear;
+
+      const totalDlsTillLastMonth = dlsList.filter(d => 
+        d.year < lastMonthYear || (d.year === lastMonthYear && d.month <= lastMonth)
+      ).reduce((sum, d) => sum + Number(d.amount || 0), 0);
+
+      const lastMonthDls = dlsList.filter(d => d.month === lastMonth && d.year === lastMonthYear).reduce((sum, d) => sum + Number(d.amount || 0), 0);
+      
+      const lastMonthExp = expenditures.filter(e => {
+        const d = parseDateString(e.date);
+        return d.month === lastMonth && d.year === lastMonthYear;
+      }).reduce((sum, e) => sum + Number(e.amount || 0), 0);
+
+      return {
+        label1: 'Total (Till Last Month)', val1: totalDlsTillLastMonth,
+        label2: 'Last Month DLS', val2: lastMonthDls,
+        label3: 'Last Month Profit', val3: lastMonthDls - lastMonthExp
+      };
+    } else {
+      const currentMonthDls = dlsList.filter(d => d.month === dlsFilterMonth && d.year === dlsFilterYear).reduce((sum, d) => sum + Number(d.amount || 0), 0);
+      
+      const currentMonthExp = expenditures.filter(e => {
+        const d = parseDateString(e.date);
+        return d.month === dlsFilterMonth && d.year === dlsFilterYear;
+      }).reduce((sum, e) => sum + Number(e.amount || 0), 0);
+
+      return {
+        label1: `Total DLS in ${MONTHS[dlsFilterMonth-1]}`, val1: currentMonthDls,
+        label2: `${MONTHS[dlsFilterMonth-1]} DLS`, val2: currentMonthDls,
+        label3: `${MONTHS[dlsFilterMonth-1]} Profit`, val3: currentMonthDls - currentMonthExp
+      };
     }
+  }, [dlsList, expenditures, dlsFilterMonth, dlsFilterYear, currentMonth, currentYear]);
+
+  const calculateReminderDate = (eventDate: string, reminderType: string): string | undefined => {
+    if (reminderType === 'none') return undefined;
+    const date = new Date(eventDate);
+    switch (reminderType) {
+      case '15_days': date.setDate(date.getDate() - 15); break;
+      case '1_month': date.setMonth(date.getMonth() - 1); break;
+      case '3_months': date.setMonth(date.getMonth() - 3); break;
+      case '6_months': date.setMonth(date.getMonth() - 6); break;
+      case '1_year': date.setFullYear(date.getFullYear() - 1); break;
+      default: return undefined;
+    }
+    return date.toISOString().split('T')[0];
   };
 
   const handleAddEvent = async () => {
@@ -177,6 +239,8 @@ export default function DashboardScreen() {
           date: selectedDate,
           description: eventDescription.substring(0, 15),
           created_by: user?.name,
+          reminder: reminder !== 'none' ? reminder : undefined,
+          reminder_date: calculateReminderDate(selectedDate, reminder),
         }),
       });
 
@@ -185,19 +249,14 @@ export default function DashboardScreen() {
         setEventModalVisible(false);
         setEventDescription('');
         setSelectedDate('');
-        fetchEvents();
+        setReminder('none');
+        fetchAllData();
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to add event');
     } finally {
       setAddingEvent(false);
     }
-  };
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await Promise.all([fetchStats(), fetchChartData(), fetchDLS(), fetchEvents()]);
-    setRefreshing(false);
   };
 
   const handleLogout = () => {
@@ -208,7 +267,6 @@ export default function DashboardScreen() {
         style: 'destructive',
         onPress: async () => {
           await logout();
-          router.replace('/');
         },
       },
     ]);
@@ -217,73 +275,29 @@ export default function DashboardScreen() {
   const exportToPDF = async () => {
     try {
       setExporting(true);
-
       const html = `
 <!DOCTYPE html>
 <html>
 <head>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     body { font-family: Arial, sans-serif; padding: 20px; }
-    h1 { color: #10B981; text-align: center; }
-    .section { margin: 20px 0; padding: 15px; border: 1px solid #E5E7EB; border-radius: 8px; }
-    .row { display: flex; justify-content: space-between; margin: 10px 0; }
-    .label { font-weight: bold; color: #6B7280; }
-    .value { color: #1F2937; }
-    .footer { text-align: center; margin-top: 40px; color: #9CA3AF; font-size: 12px; }
+    h1 { color: #10B981; }
+    h2 { color: #374151; margin-top: 20px; }
+    p { color: #6B7280; }
   </style>
 </head>
 <body>
-  <h1>Wazir Dairy Farming - Dashboard Report</h1>
-  <p style="text-align: center; color: #6B7280;">Generated on ${new Date().toLocaleDateString()}</p>
-
-  <div class="section">
-    <h2>Total Investment</h2>
-    <div class="row">
-      <span class="label">Total:</span>
-      <span class="value">₹${stats?.total_investment.toLocaleString('en-IN') || '0'}</span>
-    </div>
-    <div class="row">
-      <span class="label">Aadil:</span>
-      <span class="value">₹${stats?.aadil_investment.toLocaleString('en-IN') || '0'}</span>
-    </div>
-    <div class="row">
-      <span class="label">Imran:</span>
-      <span class="value">₹${stats?.imran_investment.toLocaleString('en-IN') || '0'}</span>
-    </div>
-  </div>
-
-  <div class="section">
-    <h2>Monthly Performance</h2>
-    <div class="row">
-      <span class="label">Earnings:</span>
-      <span class="value">₹${stats?.total_earnings.toLocaleString('en-IN') || '0'}</span>
-    </div>
-    <div class="row">
-      <span class="label">Expenditure:</span>
-      <span class="value">₹${stats?.total_expenditure.toLocaleString('en-IN') || '0'}</span>
-    </div>
-    <div class="row">
-      <span class="label">Net Profit:</span>
-      <span class="value">₹${stats?.net_profit.toLocaleString('en-IN') || '0'}</span>
-    </div>
-  </div>
-
-  <div class="section">
-    <h2>Dairy Lock Sales</h2>
-    <div class="row">
-      <span class="label">Total:</span>
-      <span class="value">₹${stats?.total_dls.toLocaleString('en-IN') || '0'}</span>
-    </div>
-    <div class="row">
-      <span class="label">Current Month:</span>
-      <span class="value">₹${currentMonthDLS.toLocaleString('en-IN')}</span>
-    </div>
-  </div>
-
-  <div class="footer">
-    <p>Wazir Dairy Farming © 2026</p>
-  </div>
+  <h1>🐄 Wazir Dairy Farming - Report</h1>
+  <p>Generated on ${new Date().toLocaleDateString()}</p>
+  
+  <h2>Overall Stats (All Time)</h2>
+  <p><strong>Total Investment:</strong> ₹${allTimeStats.totalInv.toLocaleString('en-IN')}</p>
+  <p><strong>Total Net DLS:</strong> ₹${allTimeStats.netDlsAllTime.toLocaleString('en-IN')}</p>
+  
+  <h2>Selected Performance (${perfMonth === 0 ? 'All Year' : MONTHS[perfMonth-1]} ${perfYear})</h2>
+  <p><strong>Earnings:</strong> ₹${perfStats.earnings.toLocaleString('en-IN')}</p>
+  <p><strong>Expenditure:</strong> ₹${perfStats.exp.toLocaleString('en-IN')}</p>
+  <p><strong>Net Profit:</strong> ₹${perfStats.net.toLocaleString('en-IN')}</p>
 </body>
 </html>
       `;
@@ -312,24 +326,30 @@ export default function DashboardScreen() {
     }
   };
 
+  const filteredEvents = events.filter((event: any) => {
+    const eventMonth = event.date.substring(0, 7);
+    const formattedSelectedMonthYear = `${calYear}-${String(calMonth).padStart(2, '0')}`;
+    return eventMonth === formattedSelectedMonthYear;
+  });
+
   return (
     <ImageBackground source={BACKGROUND_IMAGE} style={styles.background} resizeMode="cover">
       <View style={styles.overlay}>
         <ScrollView
           ref={scrollViewRef}
           style={styles.container}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         >
           {/* Header */}
           <View style={styles.header}>
             <View>
               <Text style={styles.greeting}>Welcome back,</Text>
-              <Text style={styles.userName}>{user?.name}</Text>
+              <Text style={styles.userName} adjustsFontSizeToFit minimumFontScale={0.8} numberOfLines={1}>
+                {user?.name || 'User'}
+              </Text>
             </View>
             <View style={styles.headerButtons}>
-              <TouchableOpacity onPress={exportToPDF} style={styles.exportButton}>
+              <TouchableOpacity onPress={exportToPDF} style={styles.exportButton} disabled={exporting}>
                 <Ionicons name="download-outline" size={24} color="#10B981" />
               </TouchableOpacity>
               <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
@@ -338,93 +358,164 @@ export default function DashboardScreen() {
             </View>
           </View>
 
-          {/* Investment Card */}
+          {/* ✅ Point 3 Fix: Imran Inv & Aadil Inv placed on the left side */}
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Total Investment</Text>
-            <Text style={styles.mainValue}>₹{stats?.total_investment.toLocaleString('en-IN') || '0'}</Text>
-            <View style={styles.divider} />
-            <View style={styles.row}>
-              <View style={styles.stat}>
-                <Text style={styles.statLabel}>Aadil</Text>
-                <Text style={styles.statValue}>₹{stats?.aadil_investment.toLocaleString('en-IN') || '0'}</Text>
+            <Text style={styles.cardTitleMerged}>Overall Dashboard (All Time)</Text>
+            <View style={styles.twoColumnRow}>
+              <View style={styles.halfColLeft}>
+                <Text style={styles.statLabelMerged}>Total Investment</Text>
+                <Text style={styles.mainValue} adjustsFontSizeToFit minimumFontScale={0.6} numberOfLines={1}>
+                  ₹{allTimeStats.totalInv.toLocaleString('en-IN')}
+                </Text>
+                
+                <View style={styles.subStatsContainer}>
+                  <Text style={styles.subStatText}>Aadil: ₹{allTimeStats.aadilInv.toLocaleString('en-IN')}</Text>
+                  <Text style={styles.subStatText}>Imran: ₹{allTimeStats.imranInv.toLocaleString('en-IN')}</Text>
+                </View>
               </View>
-              <View style={styles.stat}>
-                <Text style={styles.statLabel}>Imran</Text>
-                <Text style={styles.statValue}>₹{stats?.imran_investment.toLocaleString('en-IN') || '0'}</Text>
+              
+              <View style={styles.verticalDivider} />
+              
+              <View style={styles.halfColRight}>
+                <Text style={styles.statLabelMerged}>Total DLS (Net)</Text>
+                <Text
+                  style={[styles.mainValue, allTimeStats.netDlsAllTime >= 0 ? styles.positiveValue : styles.negativeValue]}
+                  adjustsFontSizeToFit minimumFontScale={0.6} numberOfLines={1}
+                >
+                  ₹{allTimeStats.netDlsAllTime.toLocaleString('en-IN')}
+                </Text>
+                <Text style={styles.netDLSSubtext} numberOfLines={1}>Total DLS - Total Exp</Text>
               </View>
             </View>
           </View>
 
-          {/* Monthly Performance Card */}
+          {/* MONTHLY PERFORMANCE CARD */}
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Monthly Performance</Text>
-            <View style={styles.metricsRow}>
+            <View style={styles.pickerRowInner}>
+              <View style={styles.pickerWrapperInner}>
+                <Picker 
+                  selectedValue={perfMonth} 
+                  onValueChange={(val) => setPerfMonth(Number(val))} 
+                  style={styles.picker} 
+                  itemStyle={styles.pickerItem}
+                >
+                  <Picker.Item label="All Year" value={0} color="#374151" />
+                  {MONTHS.map((m, i) => <Picker.Item key={m} label={m} value={i + 1} color="#374151" />)}
+                </Picker>
+              </View>
+              <View style={styles.pickerWrapperInner}>
+                <Picker 
+                  selectedValue={perfYear} 
+                  onValueChange={(val) => setPerfYear(Number(val))} 
+                  style={styles.picker} 
+                  itemStyle={styles.pickerItem}
+                >
+                  {YEARS.map(y => <Picker.Item key={y} label={y.toString()} value={y} color="#374151" />)}
+                </Picker>
+              </View>
+            </View>
+
+            <View style={styles.metricsRowAligned}>
               <View style={styles.metricItem}>
-                <Ionicons name="trending-up" size={24} color="#10B981" />
-                <Text style={styles.metricLabel}>Earnings</Text>
-                <Text style={styles.metricValue}>₹{stats?.total_earnings.toLocaleString('en-IN') || '0'}</Text>
+                <Text style={styles.metricLabel} numberOfLines={1}>Earnings</Text>
+                <Text style={styles.metricValue} adjustsFontSizeToFit minimumFontScale={0.6} numberOfLines={1}>
+                  ₹{perfStats.earnings.toLocaleString('en-IN')}
+                </Text>
               </View>
               <View style={styles.metricItem}>
-                <Ionicons name="trending-down" size={24} color="#EF4444" />
-                <Text style={styles.metricLabel}>Expenditure</Text>
-                <Text style={styles.metricValue}>₹{stats?.total_expenditure.toLocaleString('en-IN') || '0'}</Text>
+                <Text style={styles.metricLabel} numberOfLines={1}>Expenditure</Text>
+                <Text style={styles.metricValue} adjustsFontSizeToFit minimumFontScale={0.6} numberOfLines={1}>
+                  ₹{perfStats.exp.toLocaleString('en-IN')}
+                </Text>
               </View>
               <View style={styles.metricItem}>
-                <Ionicons name="cash" size={24} color="#3B82F6" />
-                <Text style={styles.metricLabel}>Net Profit</Text>
-                <Text style={[styles.metricValue, { color: (stats?.net_profit || 0) >= 0 ? '#10B981' : '#EF4444' }]}>
-                  ₹{stats?.net_profit.toLocaleString('en-IN') || '0'}
+                <Text style={styles.metricLabel} numberOfLines={1}>Net Profit</Text>
+                <Text
+                  style={[styles.metricValue, perfStats.net >= 0 ? styles.positiveValue : styles.negativeValue]}
+                  adjustsFontSizeToFit minimumFontScale={0.6} numberOfLines={1}
+                >
+                  ₹{perfStats.net.toLocaleString('en-IN')}
                 </Text>
               </View>
             </View>
           </View>
 
-          {/* Dairy Lock Sales Card */}
+          {/* DAIRY LOCK SALES CARD */}
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Dairy Lock Sales</Text>
-            <View style={styles.dlsContainer}>
-              <View style={styles.dlsItem}>
-                <Text style={styles.dlsLabel}>Total</Text>
-                <Text style={styles.dlsValue}>₹{stats?.total_dls.toLocaleString('en-IN') || '0'}</Text>
+            <View style={styles.pickerRowInner}>
+              <View style={styles.pickerWrapperInner}>
+                <Picker 
+                  selectedValue={dlsFilterMonth} 
+                  onValueChange={(val) => setDlsFilterMonth(Number(val))} 
+                  style={styles.picker} 
+                  itemStyle={styles.pickerItem}
+                >
+                  <Picker.Item label="No Filter" value={0} color="#374151" />
+                  {MONTHS.map((m, i) => <Picker.Item key={m} label={m} value={i + 1} color="#374151" />)}
+                </Picker>
               </View>
-              <View style={styles.dlsDivider} />
-              <View style={styles.dlsItem}>
-                <Text style={styles.dlsLabel}>This Month</Text>
-                <Text style={styles.dlsMonthValue}>₹{currentMonthDLS.toLocaleString('en-IN')}</Text>
+              <View style={styles.pickerWrapperInner}>
+                <Picker 
+                  selectedValue={dlsFilterYear} 
+                  onValueChange={(val) => setDlsFilterYear(Number(val))} 
+                  style={styles.picker} 
+                  itemStyle={styles.pickerItem}
+                >
+                  {YEARS.map(y => <Picker.Item key={y} label={y.toString()} value={y} color="#374151" />)}
+                </Picker>
               </View>
-              <View style={styles.dlsDivider} />
-              <View style={styles.dlsItem}>
-                <Text style={styles.dlsLabel}>Actual Monthly Profit</Text>
-                <Text style={[styles.dlsNetProfit, { color: (currentMonthDLS - (stats?.total_expenditure || 0)) >= 0 ? '#10B981' : '#EF4444' }]}>
-                  ₹{(currentMonthDLS - (stats?.total_expenditure || 0)).toLocaleString('en-IN')}
+            </View>
+
+            <View style={styles.row}>
+              <View style={styles.stat}>
+                <Text style={styles.statLabel} numberOfLines={1}>{dlsStats.label1}</Text>
+                <Text style={styles.dlsValue} adjustsFontSizeToFit minimumFontScale={0.6} numberOfLines={1}>
+                  ₹{dlsStats.val1.toLocaleString('en-IN')}
+                </Text>
+              </View>
+              <View style={styles.stat}>
+                <Text style={styles.statLabel} numberOfLines={1}>{dlsStats.label2}</Text>
+                <Text style={styles.dlsMonthValue} adjustsFontSizeToFit minimumFontScale={0.6} numberOfLines={1}>
+                  ₹{dlsStats.val2.toLocaleString('en-IN')}
+                </Text>
+              </View>
+              <View style={styles.stat}>
+                <Text style={styles.statLabel} numberOfLines={1}>{dlsStats.label3}</Text>
+                <Text
+                  style={[styles.dlsNetProfit, dlsStats.val3 >= 0 ? styles.positiveValue : styles.negativeValue]}
+                  adjustsFontSizeToFit minimumFontScale={0.6} numberOfLines={1}
+                >
+                  ₹{dlsStats.val3.toLocaleString('en-IN')}
                 </Text>
               </View>
             </View>
           </View>
 
-          {/* Event Calendar */}
+          {/* Event Calendar Card */}
           <View style={styles.card}>
             <View style={styles.calendarHeader}>
               <Text style={styles.cardTitle}>Event Calendar</Text>
-              <TouchableOpacity
-                onPress={() => setEventModalVisible(true)}
-                style={styles.addEventButton}
-              >
-                <Ionicons name="add" size={20} color="#fff" />
-              </TouchableOpacity>
             </View>
             <Calendar
               markedDates={{
                 ...events.reduce((acc: any, event: any) => {
-                  acc[event.date] = {
-                    marked: true,
-                    dotColor: '#10B981',
-                    customStyles: {
-                      container: {
-                        backgroundColor: '#F0FDF4',
+                  if (!event.deleted) {
+                    const isReminder = !!event.reminder;
+                    const existing = acc[event.date];
+                    const shouldBeRed = isReminder || (existing && existing.dotColor === '#EF4444');
+                    
+                    acc[event.date] = {
+                      marked: true,
+                      dotColor: shouldBeRed ? '#EF4444' : '#10B981',
+                      customStyles: {
+                        container: {
+                          backgroundColor: '#F0FDF4',
+                        },
                       },
-                    },
-                  };
+                    };
+                  }
                   return acc;
                 }, {}),
                 [selectedDate]: {
@@ -436,6 +527,10 @@ export default function DashboardScreen() {
                 setSelectedDate(day.dateString);
                 setEventModalVisible(true);
               }}
+              onMonthChange={(month: any) => {
+                setCalMonth(month.month);
+                setCalYear(month.year);
+              }}
               theme={{
                 selectedDayBackgroundColor: '#10B981',
                 todayTextColor: '#10B981',
@@ -443,14 +538,21 @@ export default function DashboardScreen() {
               }}
             />
 
-            {/* Event List */}
             <View style={styles.eventList}>
-              {events.map((event: any) => (
+              <Text style={styles.eventListTitle} numberOfLines={1}>
+                Events - {new Date(calYear, calMonth - 1, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}
+              </Text>
+              {filteredEvents.map((event: any) => (
                 <View key={event._id} style={styles.eventItem}>
                   <View style={styles.eventDot} />
                   <View style={styles.eventContent}>
-                    <Text style={styles.eventDate}>{event.date}</Text>
-                    <Text style={styles.eventDesc}>{event.description}</Text>
+                    <Text style={styles.eventDate} numberOfLines={1}>
+                      {event.date}
+                    </Text>
+                    <Text style={styles.eventDesc} numberOfLines={1}>
+                      {event.description}
+                      {event.reminder && ` 🔔 (${event.reminder.replace('_', ' ')})`}
+                    </Text>
                   </View>
                   <TouchableOpacity
                     onPress={async () => {
@@ -458,29 +560,29 @@ export default function DashboardScreen() {
                         await fetch(`${BACKEND_URL}/api/events/${event._id}`, {
                           method: 'DELETE',
                         });
-                        fetchEvents();
+                        fetchAllData();
                       } catch (error) {
                         Alert.alert('Error', 'Failed to delete event');
                       }
                     }}
                   >
-                    <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                    <Ionicons name="trash-outline" size={20} color="#EF4444" />
                   </TouchableOpacity>
                 </View>
               ))}
+              {filteredEvents.length === 0 && (
+                <Text style={styles.noEventsText}>No events for this month</Text>
+              )}
             </View>
           </View>
         </ScrollView>
 
-        {/* Event Add Modal */}
-        <Modal
-          visible={eventModalVisible}
-          animationType="slide"
-          transparent={true}
-          onRequestClose={() => setEventModalVisible(false)}
-        >
+        <Modal visible={eventModalVisible} transparent animationType="slide">
           <View style={styles.modalOverlay}>
-            <View style={styles.eventModalContent}>
+            <KeyboardAvoidingView 
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
+              style={styles.eventModalContent}
+            >
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>Add Event</Text>
                 <TouchableOpacity onPress={() => setEventModalVisible(false)}>
@@ -488,33 +590,62 @@ export default function DashboardScreen() {
                 </TouchableOpacity>
               </View>
 
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Date: {selectedDate || 'Select a date'}</Text>
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Event Description ({eventDescription.length}/15)</Text>
-                <TextInput
-                  style={styles.input}
-                  value={eventDescription}
-                  onChangeText={(text) => setEventDescription(text.substring(0, 15))}
-                  placeholder="e.g., Deworming"
-                  maxLength={15}
-                />
-              </View>
-
-              <TouchableOpacity
-                style={[styles.submitButton, addingEvent && styles.submitButtonDisabled]}
-                onPress={handleAddEvent}
-                disabled={addingEvent}
+              <ScrollView 
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 100 }}
+                keyboardShouldPersistTaps="handled"
               >
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Date: {selectedDate || 'Select a date'}</Text>
+                </View>
+
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Event Description ({eventDescription.length}/15)</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={eventDescription}
+                    onChangeText={(text) => setEventDescription(text.substring(0, 15))}
+                    placeholder="e.g., Deworming"
+                    placeholderTextColor="#9CA3AF"
+                    maxLength={15}
+                  />
+                </View>
+
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Reminder</Text>
+                  <View style={styles.reminderOptions}>
+                    {['none', '15_days', '1_month', '3_months', '6_months', '1_year'].map((option) => (
+                      <TouchableOpacity
+                        key={option}
+                        style={[
+                          styles.reminderButton,
+                          reminder === option && styles.reminderButtonActive,
+                        ]}
+                        onPress={() => setReminder(option)}
+                      >
+                        <Text
+                          style={[
+                            styles.reminderButtonText,
+                            reminder === option && styles.reminderButtonTextActive,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {option === 'none' ? 'None' : option.replace('_', ' ')}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
                 {addingEvent ? (
-                  <ActivityIndicator color="#fff" />
+                  <ActivityIndicator size="large" color="#10B981" style={{ marginTop: 20 }} />
                 ) : (
-                  <Text style={styles.submitButtonText}>Add Event</Text>
+                  <TouchableOpacity onPress={handleAddEvent} style={styles.submitButton}>
+                    <Text style={styles.submitButtonText}>Add Event</Text>
+                  </TouchableOpacity>
                 )}
-              </TouchableOpacity>
-            </View>
+              </ScrollView>
+            </KeyboardAvoidingView>
           </View>
         </Modal>
       </View>
@@ -542,11 +673,11 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   greeting: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#6B7280',
   },
   userName: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: 'bold',
     color: '#1F2937',
   },
@@ -565,7 +696,7 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: '#fff',
     borderRadius: 12,
-    padding: 20,
+    padding: 16,
     marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -574,42 +705,96 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   cardTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
     color: '#374151',
     marginBottom: 10,
   },
-  mainValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#10B981',
+  cardTitleMerged: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 12,
+    textAlign: 'center',
   },
-  divider: {
-    height: 1,
-    backgroundColor: '#E5E7EB',
-    marginVertical: 16,
-  },
-  row: {
+  twoColumnRow: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
   },
-  stat: {
-    alignItems: 'center',
+  halfColLeft: {
+    flex: 1,
+    paddingRight: 10,
+    justifyContent: 'center',
   },
-  statLabel: {
+  halfColRight: {
+    flex: 1,
+    paddingLeft: 10,
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+  },
+  verticalDivider: {
+    width: 1,
+    backgroundColor: '#E5E7EB',
+    marginVertical: 10,
+  },
+  subStatsContainer: {
+    marginTop: 12,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
+  subStatText: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  statLabelMerged: {
     fontSize: 12,
     color: '#6B7280',
     marginBottom: 4,
   },
-  statValue: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
+  mainValue: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#10B981',
   },
-  metricsRow: {
+  positiveValue: {
+    color: '#10B981',
+  },
+  negativeValue: {
+    color: '#EF4444',
+  },
+  netDLSSubtext: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    marginTop: 2,
+  },
+  pickerRowInner: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 16,
+  },
+  pickerWrapperInner: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    backgroundColor: '#F9FAFB',
+    justifyContent: 'center',
+  },
+  picker: {
+    height: 50,
+    width: '100%',
+    color: '#374151', 
+  },
+  pickerItem: {
+    color: '#374151',
+    fontSize: 14,
+  },
+  metricsRowAligned: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 12,
+    alignItems: 'center',
   },
   metricItem: {
     alignItems: 'center',
@@ -618,47 +803,40 @@ const styles = StyleSheet.create({
   metricLabel: {
     fontSize: 11,
     color: '#6B7280',
-    marginTop: 4,
     marginBottom: 4,
+    textAlign: 'center',
   },
   metricValue: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
     color: '#1F2937',
   },
-  dlsContainer: {
+  row: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 8,
+    justifyContent: 'space-around',
   },
-  dlsItem: {
+  stat: {
+    alignItems: 'center',
     flex: 1,
-    alignItems: 'center',
   },
-  dlsDivider: {
-    width: 1,
-    height: 60,
-    backgroundColor: '#E5E7EB',
-    marginHorizontal: 16,
-  },
-  dlsLabel: {
-    fontSize: 12,
+  statLabel: {
+    fontSize: 11,
     color: '#6B7280',
-    marginBottom: 8,
-  },
-  dlsMonthValue: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#3B82F6',
+    marginBottom: 4,
+    textAlign: 'center',
   },
   dlsValue: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
     color: '#10B981',
   },
+  dlsMonthValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#3B82F6',
+  },
   dlsNetProfit: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
   },
   calendarHeader: {
@@ -667,16 +845,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
-  addEventButton: {
-    backgroundColor: '#10B981',
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   eventList: {
     marginTop: 16,
+  },
+  eventListTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 12,
   },
   eventItem: {
     flexDirection: 'row',
@@ -696,14 +872,20 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   eventDate: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#6B7280',
     marginBottom: 2,
   },
   eventDesc: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#1F2937',
     fontWeight: '500',
+  },
+  noEventsText: {
+    fontSize: 13,
+    color: '#9CA3AF',
+    textAlign: 'center',
+    marginTop: 12,
   },
   modalOverlay: {
     flex: 1,
@@ -715,7 +897,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
-    maxHeight: '60%',
+    maxHeight: '85%',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -724,7 +906,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#1F2937',
   },
@@ -732,20 +914,41 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   label: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: '#374151',
     marginBottom: 8,
   },
-  input: {
-    backgroundColor: '#F9FAFB',
+  input: { 
+    backgroundColor: '#F9FAFB', borderRadius: 8, borderWidth: 1, 
+    borderColor: '#E5E7EB', paddingVertical: 12, paddingHorizontal: 16, 
+    fontSize: 16, color: '#374151',
+    minHeight: 50, /* ✅ Added minHeight */
+  },
+  reminderOptions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  reminderButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     borderRadius: 8,
+    backgroundColor: '#F3F4F6',
     borderWidth: 1,
     borderColor: '#E5E7EB',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    fontSize: 16,
-    color: '#1F2937',
+  },
+  reminderButtonActive: {
+    backgroundColor: '#10B981',
+    borderColor: '#10B981',
+  },
+  reminderButtonText: {
+    fontSize: 11,
+    color: '#374151',
+  },
+  reminderButtonTextActive: {
+    color: '#fff',
+    fontWeight: '600',
   },
   submitButton: {
     backgroundColor: '#10B981',
@@ -753,13 +956,11 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: 'center',
     marginTop: 8,
-  },
-  submitButtonDisabled: {
-    backgroundColor: '#9CA3AF',
+    marginBottom: 20,
   },
   submitButtonText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
   },
 });
