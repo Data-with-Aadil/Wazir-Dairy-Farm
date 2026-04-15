@@ -391,10 +391,10 @@ export default function WRXScreen() {
   return (
     <ImageBackground source={BACKGROUND_IMAGE} style={styles.background} resizeMode="cover">
       <View style={styles.overlay}>
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
-          style={styles.modalContent}       // ✅ एकदम सही!
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 20}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.container}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
         >
           {/* Header */}
           <View style={styles.header}>
