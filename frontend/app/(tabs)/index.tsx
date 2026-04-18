@@ -102,13 +102,13 @@ export default function DashboardScreen() {
 
   const scrollViewRef = React.useRef<ScrollView>(null);
 
-  useEffect(() => {
-    console.log("Dashboard Check - User State:", user); // <--- Dekho logout ke baad 'null' aa raha hai ya nahi
-    if (!isLoading && !user) {
-      console.log("No user found, redirecting to Login...");
-      router.replace('/');
-    }
-  }, [user, isLoading]);
+  // useEffect(() => {
+  //   console.log("Dashboard Check - User State:", user); // <--- Dekho logout ke baad 'null' aa raha hai ya nahi
+  //   if (!isLoading && !user) {
+  //     console.log("No user found, redirecting to Login...");
+  //     router.replace('/');
+  //   }
+  // }, [user, isLoading]);
 
   useFocusEffect(
     React.useCallback(() => {
