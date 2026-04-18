@@ -267,7 +267,7 @@ export default function ExpenditureScreen() {
         billData.amount = 0; 
       }
 
-      const response = await fetch(`${BACKEND_URL}/api/bills`, {
+      const response = await fetch(`${BACKEND_URL}/api/bills?user=${user?.name}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(billData),
@@ -288,42 +288,54 @@ export default function ExpenditureScreen() {
     }
   };
 
-  // ✅ Web + Mobile Download Logic Fix
+// ✅ Web + Mobile Download Logic Fix
   const handleDownloadBill = async (bill: Bill) => {
     try {
       const sanitizedDesc = bill.description.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 20);
       const fileName = `bill_${sanitizedDesc}_${Date.now()}.jpg`;
 
-      // 🌐 WEB LOGIC
+      // 🌐 WEB LOGIC (ये तो तुम्हारा मस्त चल ही रहा है)
       if (Platform.OS === 'web') {
         const link = document.createElement('a');
-        link.href = bill.image; // Assuming it's already a base64 data URI
+        link.href = bill.image; 
         link.download = fileName;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
         window.alert('✅ Bill downloaded successfully!');
       } 
-      // 📱 MOBILE LOGIC
+      // 📱 MOBILE LOGIC (इसे एकदम फुल-प्रूफ कर दिया है)
       else {
-        const fileUri = FileSystem.cacheDirectory + fileName;
-        const base64Data = bill.image.replace(/^data:image\/\w+;base64,/, '');
+        console.log("Mobile Download Start..."); // Debug के लिए
+        
+        // Android/iOS शेयरिंग के लिए documentDirectory ज्यादा सेफ है
+        const fileUri = `${FileSystem.documentDirectory}${fileName}`; 
+        
+        // Base64 स्ट्रिंग को क्लीन तरीके से अलग करना
+        let base64Data = bill.image;
+        if (bill.image.includes(',')) {
+          base64Data = bill.image.split(',')[1]; 
+        }
 
+        console.log("Writing file to:", fileUri);
         await FileSystem.writeAsStringAsync(fileUri, base64Data, {
           encoding: FileSystem.EncodingType.Base64,
         });
 
-        if (await Sharing.isAvailableAsync()) {
+        const canShare = await Sharing.isAvailableAsync();
+        if (canShare) {
+          console.log("Opening Share Dialog...");
           await Sharing.shareAsync(fileUri, {
             mimeType: 'image/jpeg',
-            dialogTitle: 'Download Bill',
+            dialogTitle: 'Download / Share Bill',
+            UTI: 'public.jpeg' // iOS के लिए ज़रूरी
           });
         } else {
-          Alert.alert('Success', 'Bill saved to device');
+          Alert.alert('Success', `Bill saved to device memory`);
         }
       }
     } catch (error) {
-      console.error('Download error:', error);
+      console.error('Mobile Download error:', error); // 🚨 अगर अब भी फटा, तो ये लॉग हमें सच बता देगा
       Alert.alert('Error', 'Failed to download bill');
     }
   };
@@ -357,7 +369,7 @@ export default function ExpenditureScreen() {
 
     setLoading(true);
     try {
-      const response = await fetch(`${BACKEND_URL}/api/expenditures`, {
+      const response = await fetch(`${BACKEND_URL}/api/expenditures?user=${user?.name}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

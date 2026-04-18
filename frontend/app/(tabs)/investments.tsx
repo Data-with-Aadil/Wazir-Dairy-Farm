@@ -152,7 +152,7 @@ export default function InvestmentsScreen() {
 
     setLoading(true);
     try {
-      const response = await fetch(`${BACKEND_URL}/api/investments`, {
+      const response = await fetch(`${BACKEND_URL}/api/investments?user=${user?.name}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

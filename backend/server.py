@@ -398,19 +398,19 @@ async def delete_expenditure(expenditure_id: str, user: str):
 # ==================== MILK SALES ENDPOINTS ====================
 
 @api_router.post("/milk-sales")
-async def create_milk_sale(sale: MilkSale):
+async def create_milk_sale(sale: MilkSale, user: str): # 👈 यहाँ user: str ऐड किया
     result = await db.milk_sales.insert_one(sale.dict())
     notif = Notification(
         type="milk_sale",
         data=sale.dict(),
-        message=f"Milk Sale added for {sale.date} - {sale.volume}L at {sale.fat_percentage}% fat, Rate: ₹{sale.rate} = ₹{sale.earnings:,.0f}"
+        message=f"{user} added Milk Sale for {sale.date} - {sale.volume}L at {sale.fat_percentage}% fat, Rate: ₹{sale.rate} = ₹{sale.earnings:,.0f}" # 👈 'System' को 'user' से बदला
     )
     await db.notifications.insert_one(notif.dict())
     
     await send_push_notification(
-        "System",
+        user, # 👈 'System' को 'user' से बदला
         "New Milk Sale",
-        f"Milk Sale added for {sale.date} - ₹{sale.earnings:,.0f}",
+        f"{user} added Milk Sale for {sale.date} - ₹{sale.earnings:,.0f}", # 👈 'System' को 'user' से बदला
         {"screen": "/(tabs)/wrx", "type": "milk_sale"}
     )
     
@@ -478,19 +478,19 @@ async def delete_milk_sale(sale_id: str, user: str):
 # ==================== DAIRY LOCK SALES ENDPOINTS ====================
 
 @api_router.post("/dairy-lock-sales")
-async def create_dls(dls: DairyLockSale):
+async def create_dls(dls: DairyLockSale, user: str): # 👈 यहाँ user: str ऐड किया
     result = await db.dairy_lock_sales.insert_one(dls.dict())
     notif = Notification(
         type="dls",
         data=dls.dict(),
-        message=f"Dairy Lock Sale added for {dls.month}/{dls.year} - ₹{dls.amount:,.0f} on {dls.date}"
+        message=f"{user} added Dairy Lock Sale for {dls.month}/{dls.year} - ₹{dls.amount:,.0f} on {dls.date}" # 👈 'System' को 'user' से बदला
     )
     await db.notifications.insert_one(notif.dict())
     
     await send_push_notification(
-        "System",
+        user, # 👈 'System' को 'user' से बदला
         "New DLS Payment",
-        f"Dairy Lock Sale added for {dls.month}/{dls.year} - ₹{dls.amount:,.0f}",
+        f"{user} added Dairy Lock Sale for {dls.month}/{dls.year} - ₹{dls.amount:,.0f}", # 👈 'System' को 'user' से बदला
         {"screen": "/(tabs)/wrx", "type": "dls"}
     )
     

@@ -150,7 +150,7 @@ export default function MilkSalesScreen() {
 
     setLoading(true);
     try {
-      const response = await fetch(`${BACKEND_URL}/api/milk-sales`, {
+      const response = await fetch(`${BACKEND_URL}/api/milk-sales?user=${user?.name}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

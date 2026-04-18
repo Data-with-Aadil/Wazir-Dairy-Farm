@@ -102,11 +102,13 @@ export default function DashboardScreen() {
 
   const scrollViewRef = React.useRef<ScrollView>(null);
 
-  useEffect(() => {
-    if (!isLoading && !user) {
-      router.replace('/');
-    }
-  }, [user, isLoading]);
+  // useEffect(() => {
+  //   console.log("Dashboard Check - User State:", user); // <--- Dekho logout ke baad 'null' aa raha hai ya nahi
+  //   if (!isLoading && !user) {
+  //     console.log("No user found, redirecting to Login...");
+  //     router.replace('/');
+  //   }
+  // }, [user, isLoading]);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -260,17 +262,29 @@ export default function DashboardScreen() {
   };
 
   const handleLogout = () => {
-    Alert.alert('Logout', 'Are you sure you want to logout?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Logout',
-        style: 'destructive',
-        onPress: async () => {
-          await logout();
-        },
-      },
-    ]);
-  };
+      // ✅ WEB के लिए: Alert काम नहीं करता, इसलिए सीधा Browser का 'confirm' यूज़ करेंगे
+      if (Platform.OS === 'web') {
+        const confirmLogout = window.confirm('Are you sure you want to logout?');
+        if (confirmLogout) {
+          console.log("Web Logout Triggered!"); // Debug Log
+          logout();
+        }
+      } 
+      // 📱 MOBILE (iOS/Android) के लिए: नॉर्मल Alert
+      else {
+        Alert.alert('Logout', 'Are you sure you want to logout?', [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Logout',
+            style: 'destructive',
+            onPress: () => {
+              console.log("Mobile Logout Triggered!"); // Debug Log
+              logout(); // 👈 यहाँ await की ज़रूरत नहीं है, सीधा कॉल करो
+            },
+          },
+        ]);
+      }
+    };
 
   const exportToPDF = async () => {
     try {

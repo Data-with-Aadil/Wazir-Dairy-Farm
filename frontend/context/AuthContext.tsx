@@ -210,14 +210,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     try {
+      console.log("LOGOUT START: Clearing AsyncStorage..."); 
       await AsyncStorage.removeItem('user');
+      
+      console.log("SETTING USER TO NULL..."); 
       setUser(null);
-      // ✅ FIX: Removed the buggy router loop. Using timeout to ensure state clears first.
+      
+      console.log("NAVIGATING TO LOGIN..."); 
+      
+      // 100ms का डिले ताकि React स्टेट अपडेट कर ले
       setTimeout(() => {
-        router.replace('/');
+        if (Platform.OS === 'web') {
+          // 💻 WEB के लिए: सीधा ब्राउज़र रिलोड
+          window.location.replace('/');
+        } else {
+          // 📱 MOBILE (Android/iOS) के लिए: Expo Router
+          router.replace('/');
+        }
       }, 100);
+      
     } catch (error) {
-      console.error("Logout error:", error);
+      console.error("Logout error in AuthContext:", error);
     }
   };
 
