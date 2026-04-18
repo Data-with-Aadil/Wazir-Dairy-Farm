@@ -262,17 +262,29 @@ export default function DashboardScreen() {
   };
 
   const handleLogout = () => {
-    Alert.alert('Logout', 'Are you sure you want to logout?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Logout',
-        style: 'destructive',
-        onPress: async () => {
-          await logout();
-        },
-      },
-    ]);
-  };
+      // ✅ WEB के लिए: Alert काम नहीं करता, इसलिए सीधा Browser का 'confirm' यूज़ करेंगे
+      if (Platform.OS === 'web') {
+        const confirmLogout = window.confirm('Are you sure you want to logout?');
+        if (confirmLogout) {
+          console.log("Web Logout Triggered!"); // Debug Log
+          logout();
+        }
+      } 
+      // 📱 MOBILE (iOS/Android) के लिए: नॉर्मल Alert
+      else {
+        Alert.alert('Logout', 'Are you sure you want to logout?', [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Logout',
+            style: 'destructive',
+            onPress: () => {
+              console.log("Mobile Logout Triggered!"); // Debug Log
+              logout(); // 👈 यहाँ await की ज़रूरत नहीं है, सीधा कॉल करो
+            },
+          },
+        ]);
+      }
+    };
 
   const exportToPDF = async () => {
     try {
