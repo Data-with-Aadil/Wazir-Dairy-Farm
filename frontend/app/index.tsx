@@ -22,6 +22,7 @@ export default function LoginScreen() {
   const [loggingIn, setLoggingIn] = useState(false);
 
   useEffect(() => {
+    console.log("Login Screen Check - User State:", user); // <--- Agar ye null nahi hai, toh logout fail hua hai
     if (!isLoading && user) {
       router.replace('/(tabs)');
     }
