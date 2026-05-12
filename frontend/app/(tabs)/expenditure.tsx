@@ -294,7 +294,7 @@ export default function ExpenditureScreen() {
       const sanitizedDesc = bill.description.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 20);
       const fileName = `bill_${sanitizedDesc}_${Date.now()}.jpg`;
 
-      // 🌐 WEB LOGIC (ये तो तुम्हारा मस्त चल ही रहा है)
+      // 🌐 WEB LOGIC
       if (Platform.OS === 'web') {
         const link = document.createElement('a');
         link.href = bill.image; 
@@ -304,39 +304,42 @@ export default function ExpenditureScreen() {
         document.body.removeChild(link);
         window.alert('✅ Bill downloaded successfully!');
       } 
-      // 📱 MOBILE LOGIC (इसे एकदम फुल-प्रूफ कर दिया है)
+      // 📱 MOBILE LOGIC
       else {
-        console.log("Mobile Download Start..."); // Debug के लिए
+        console.log("Mobile Download Start..."); 
         
-        // Android/iOS शेयरिंग के लिए documentDirectory ज्यादा सेफ है
-        const fileUri = `${FileSystem.documentDirectory}${fileName}`; 
+        // 🚨 FIX: Expo Sharing के लिए cacheDirectory 100% सेफ है
+        const fileUri = `${FileSystem.cacheDirectory}${fileName}`; 
         
         // Base64 स्ट्रिंग को क्लीन तरीके से अलग करना
         let base64Data = bill.image;
-        if (bill.image.includes(',')) {
+        if (bill.image.includes('base64,')) {
+          base64Data = bill.image.split('base64,')[1];
+        } else if (bill.image.includes(',')) {
           base64Data = bill.image.split(',')[1]; 
         }
 
-        console.log("Writing file to:", fileUri);
+        // 🚨 FIX: फालतू स्पेस या न्यूलाइन हटा दो जो Android को क्रैश कर सकते हैं
+        base64Data = base64Data.replace(/[^A-Za-z0-9+/=]/g, "");
+
         await FileSystem.writeAsStringAsync(fileUri, base64Data, {
           encoding: FileSystem.EncodingType.Base64,
         });
 
         const canShare = await Sharing.isAvailableAsync();
         if (canShare) {
-          console.log("Opening Share Dialog...");
           await Sharing.shareAsync(fileUri, {
             mimeType: 'image/jpeg',
             dialogTitle: 'Download / Share Bill',
-            UTI: 'public.jpeg' // iOS के लिए ज़रूरी
+            UTI: 'public.jpeg'
           });
         } else {
-          Alert.alert('Success', `Bill saved to device memory`);
+          Alert.alert('Success', `Bill saved to device cache`);
         }
       }
     } catch (error) {
-      console.error('Mobile Download error:', error); // 🚨 अगर अब भी फटा, तो ये लॉग हमें सच बता देगा
-      Alert.alert('Error', 'Failed to download bill');
+      console.error('Mobile Download error:', error); 
+      Alert.alert('Error', 'Failed to process/download bill');
     }
   };
 
