@@ -213,22 +213,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log("LOGOUT START: Clearing AsyncStorage..."); 
       await AsyncStorage.removeItem('user');
       
-      console.log("SETTING USER TO NULL..."); 
-      setUser(null);
-      
-      console.log("NAVIGATING TO LOGIN..."); 
-      
-      // 100ms का डिले ताकि React स्टेट अपडेट कर ले
-      setTimeout(() => {
-        if (Platform.OS === 'web') {
-          // 💻 WEB के लिए: सीधा ब्राउज़र रिलोड
-          window.location.replace('/');
-        } else {
-          // 📱 MOBILE (Android/iOS) के लिए: Expo Router
-          router.replace('/');
-        }
-      }, 100);
-      
+      if (Platform.OS === 'web') {
+        // 💻 WEB के लिए: सीधा ब्राउज़र रिलोड
+        setUser(null);
+        window.location.replace('/');
+      } else {
+        // 📱 MOBILE के लिए: पहले रूटिंग करो, फिर स्टेट अपडेट करो!
+        console.log("NAVIGATING TO LOGIN..."); 
+        router.replace('/'); 
+        
+        // नेविगेशन शुरू होने के बाद स्टेट को नल करो, ताकि स्क्रीन न अटके
+        setTimeout(() => {
+          setUser(null);
+        }, 150);
+      }
     } catch (error) {
       console.error("Logout error in AuthContext:", error);
     }
