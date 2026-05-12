@@ -159,16 +159,16 @@ async def send_daily_report():
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 "https://api.resend.com/emails",
-                headers={{
+                headers={  # ✅ FIX: Single Brace {
                     "Authorization": f"Bearer {RESEND_API_KEY}",
                     "Content-Type": "application/json"
-                }},
-                json={{
+                },         # ✅ FIX: Single Brace }
+                json={     # ✅ FIX: Single Brace {
                     "from": SENDER_EMAIL,
                     "to": RECIPIENT_EMAILS,
                     "subject": f"📊 Daily Report - {stats['date']}",
                     "html": html_content
-                }},
+                },         # ✅ FIX: Single Brace }
                 timeout=30.0
             )
 
