@@ -363,7 +363,7 @@ export default function DLSScreen() {
                   <View style={styles.pickerContainerInner}>
                     <Picker
                       selectedValue={month}
-                      onValueChange={(val) => setSelectedMonth(Number(val))}
+                      onValueChange={(val) => setMonth(val)}
                       style={styles.picker}
                     >
                       {MONTHS.map((m, idx) => (
