@@ -352,6 +352,154 @@ async def create_linked_investment(withdrawal: Withdrawal):
 
     result = await db.investments.insert_one(investment.dict())
     return str(result.inserted_id)
+
+@api_router.patch("/withdrawals/{withdrawal_id}")
+async def update_withdrawal(withdrawal_id: str, withdrawal: Withdrawal):
+
+    existing = await db.withdrawals.find_one(
+        {"_id": ObjectId(withdrawal_id)}
+    )
+
+    if not existing:
+        raise HTTPException(
+            status_code=404,
+            detail="Withdrawal not found"
+        )
+
+    # ----------------------------------------
+    # Validate Available DLS
+    # ----------------------------------------
+
+    balance = await calculate_available_dls()
+
+    available = (
+        balance["available_dls"] +
+        float(existing.get("amount", 0))
+    )
+
+    if withdrawal.amount > available:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Only ₹{available:,.2f} is available in DLS."
+        )
+
+    # ----------------------------------------
+    # Remove old linked records
+    # ----------------------------------------
+
+    if existing.get("linked_expenditure_id"):
+
+        await db.expenditures.delete_one(
+            {
+                "_id": ObjectId(
+                    existing["linked_expenditure_id"]
+                )
+            }
+        )
+
+    if existing.get("linked_investment_id"):
+
+        await db.investments.delete_one(
+            {
+                "_id": ObjectId(
+                    existing["linked_investment_id"]
+                )
+            }
+        )
+
+    withdrawal_dict = withdrawal.dict()
+
+    withdrawal_dict["linked_expenditure_id"] = None
+    withdrawal_dict["linked_investment_id"] = None
+
+    # ----------------------------------------
+    # Recreate linked record
+    # ----------------------------------------
+
+    if withdrawal.purpose == WithdrawalPurpose.EXPENDITURE:
+
+        expenditure_id = await create_linked_expenditure(withdrawal)
+
+        withdrawal_dict["linked_expenditure_id"] = expenditure_id
+
+    elif withdrawal.purpose == WithdrawalPurpose.INVESTMENT:
+
+        investment_id = await create_linked_investment(withdrawal)
+
+        withdrawal_dict["linked_investment_id"] = investment_id
+
+    # ----------------------------------------
+    # Save withdrawal
+    # ----------------------------------------
+
+    await db.withdrawals.update_one(
+        {
+            "_id": ObjectId(withdrawal_id)
+        },
+        {
+            "$set": withdrawal_dict
+        }
+    )
+
+    # ----------------------------------------
+    # Update reverse link
+    # ----------------------------------------
+
+    if withdrawal_dict["linked_expenditure_id"]:
+
+        await db.expenditures.update_one(
+            {
+                "_id": ObjectId(
+                    withdrawal_dict["linked_expenditure_id"]
+                )
+            },
+            {
+                "$set": {
+                    "withdrawal_id": withdrawal_id
+                }
+            }
+        )
+
+    if withdrawal_dict["linked_investment_id"]:
+
+        await db.investments.update_one(
+            {
+                "_id": ObjectId(
+                    withdrawal_dict["linked_investment_id"]
+                )
+            },
+            {
+                "$set": {
+                    "withdrawal_id": withdrawal_id
+                }
+            }
+        )
+
+    # ----------------------------------------
+    # Notification
+    # ----------------------------------------
+
+    notif = Notification(
+        type="withdrawal",
+        data=withdrawal_dict,
+        message=f"{withdrawal.withdrawn_by} updated DLS Withdrawal of ₹{withdrawal.amount:,.0f}"
+    )
+
+    await db.notifications.insert_one(notif.dict())
+
+    await send_push_notification(
+        withdrawal.withdrawn_by,
+        "Withdrawal Updated",
+        f"{withdrawal.withdrawn_by} updated a DLS Withdrawal of ₹{withdrawal.amount:,.0f}",
+        {
+            "screen": "/(tabs)/wrx",
+            "type": "withdrawal"
+        }
+    )
+
+    return {
+        "success": True
+    }
 # ==================== INVESTMENT ENDPOINTS ====================
 
 @api_router.post("/investments")
