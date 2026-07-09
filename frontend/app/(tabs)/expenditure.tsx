@@ -78,6 +78,9 @@ interface Expenditure {
   category: string;
   subcategory: string;
   notes?: string;
+  locked?: boolean;
+  withdrawal_id?: string;
+  created_from?: string;
 }
 
 interface Bill {
@@ -126,10 +129,9 @@ export default function ExpenditureScreen() {
 
   const MONTHS = ['All Time', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const currentYearForArray = new Date().getFullYear();
-  // यह 2024 से लेकर (Current Year + 2) तक का डायनामिक ऐरे बनाएगा
   const YEARS = Array.from({ length: (currentYearForArray + 2) - 2024 + 1 }, (_, i) => 2024 + i);
 
-  // ✅ Aadil & Imran Split Logic (Syncs with bulletproof filter)
+  // ✅ Updated Splits (Includes business-logic-based Withdrawal filter)
   const stats = useMemo(() => {
     const filtered = expenditures.filter(exp => {
       const { month, year } = parseDateString(exp.date);
@@ -144,16 +146,22 @@ export default function ExpenditureScreen() {
     const imranTotal = filtered
       .filter(e => e.paid_by === 'Imran')
       .reduce((sum, e) => sum + Number(e.amount), 0);
+      
+    // Using the 'locked' flag as the source of truth for DLS withdrawals
+    const withdrawalTotal = filtered
+      .filter(e => e.locked === true)
+      .reduce((sum, e) => sum + Number(e.amount), 0);
 
     return { 
       aadilTotal, 
       imranTotal, 
-      grandTotal: aadilTotal + imranTotal,
+      withdrawalTotal,
+      grandTotal: aadilTotal + imranTotal + withdrawalTotal,
       list: filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     };
   }, [expenditures, selectedMonth, selectedYear]);
 
-  // ✅ Bills Filter Logic (Syncs with bulletproof filter)
+  // ✅ Bills Filter Logic
   const filteredBills = useMemo(() => {
     return bills.filter(bill => {
       const { month, year } = parseDateString(bill.date);
@@ -288,7 +296,6 @@ export default function ExpenditureScreen() {
     }
   };
 
-// ✅ Web + Mobile Download Logic Fix
   const handleDownloadBill = async (bill: Bill) => {
     try {
       const sanitizedDesc = bill.description.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 20);
@@ -306,12 +313,8 @@ export default function ExpenditureScreen() {
       } 
       // 📱 MOBILE LOGIC
       else {
-        console.log("Mobile Download Start..."); 
-        
-        // 🚨 FIX: Expo Sharing के लिए cacheDirectory 100% सेफ है
         const fileUri = `${FileSystem.cacheDirectory}${fileName}`; 
         
-        // Base64 स्ट्रिंग को क्लीन तरीके से अलग करना
         let base64Data = bill.image;
         if (bill.image.includes('base64,')) {
           base64Data = bill.image.split('base64,')[1];
@@ -319,7 +322,6 @@ export default function ExpenditureScreen() {
           base64Data = bill.image.split(',')[1]; 
         }
 
-        // 🚨 FIX: फालतू स्पेस या न्यूलाइन हटा दो जो Android को क्रैश कर सकते हैं
         base64Data = base64Data.replace(/[^A-Za-z0-9+/=]/g, "");
 
         await FileSystem.writeAsStringAsync(fileUri, base64Data, {
@@ -338,7 +340,6 @@ export default function ExpenditureScreen() {
         }
       }
     } catch (error) {
-      console.error('Mobile Download error:', error); 
       Alert.alert('Error', 'Failed to process/download bill');
     }
   };
@@ -400,15 +401,23 @@ export default function ExpenditureScreen() {
     }
   };
 
-  const handleEdit = (expenditure: Expenditure) => {
+  const handleEdit = (exp: Expenditure) => {
+    if (exp.locked) {
+      Alert.alert(
+        "Locked",
+        "This expenditure was created from Dairy Lock Sales Withdrawal and can only be edited from the Withdrawal screen."
+      );
+      return;
+    }
+
     setEditMode(true);
-    setEditingId(expenditure._id);
-    setAmount(expenditure.amount.toString());
-    setDate(new Date(expenditure.date));
-    setPaidBy(expenditure.paid_by);
-    setCategory(expenditure.category);
-    setSubcategory(expenditure.subcategory);
-    setNotes(expenditure.notes || '');
+    setEditingId(exp._id);
+    setAmount(exp.amount.toString());
+    setDate(new Date(exp.date));
+    setPaidBy(exp.paid_by);
+    setCategory(exp.category);
+    setSubcategory(exp.subcategory);
+    setNotes(exp.notes || '');
     setModalVisible(true);
   };
 
@@ -449,8 +458,16 @@ export default function ExpenditureScreen() {
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (exp: Expenditure) => {
     if (!user?.name) return;
+    if (exp.locked) {
+      Alert.alert(
+        "Locked",
+        "This expenditure was created from Dairy Lock Sales Withdrawal and can only be deleted from the Withdrawal screen."
+      );
+      return;
+    }
+
     Alert.alert('Delete Entry', 'Are you sure?', [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -458,7 +475,7 @@ export default function ExpenditureScreen() {
         style: 'destructive',
         onPress: async () => {
           try {
-            const url = `${BACKEND_URL}/api/expenditures/${id}?user=${user.name}`;
+            const url = `${BACKEND_URL}/api/expenditures/${exp._id}?user=${user.name}`;
             const res = await fetch(url, { method: 'DELETE' });
             if (res.ok) {
               fetchExpenditures();
@@ -531,16 +548,13 @@ export default function ExpenditureScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* ✅ Sticky Header List Container */}
         <ScrollView
           ref={scrollViewRef}
           style={styles.content}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           stickyHeaderIndices={[0]}
         >
-          {/* Sticky Container */}
           <View style={styles.stickyContainer}>
-            {/* Filter Row */}
             <View style={{ flexDirection: 'row', gap: 10, marginBottom: activeTab === 'expenditures' ? 15 : 5 }}>
               <View style={styles.filterPickerContainer}>
                 <Picker 
@@ -562,27 +576,33 @@ export default function ExpenditureScreen() {
               </View>
             </View>
 
-            {/* Summary Card */}
             {activeTab === 'expenditures' && (
               <View style={styles.summaryCard}>
                 <Text style={styles.summaryLabel}>
-                  Total Expenditure ({selectedMonth === 0 ? selectedYear : `${MONTHS[selectedMonth]}/${selectedYear}`})
+                  Total Expenditure (Self + DLS) - {selectedMonth === 0 ? selectedYear : `${MONTHS[selectedMonth]}/${selectedYear}`}
                 </Text>
                 <Text style={styles.grandTotal} adjustsFontSizeToFit minimumFontScale={0.8} numberOfLines={1}>
                   ₹{stats.grandTotal.toLocaleString('en-IN')}
                 </Text>
                 <View style={styles.splitRow}>
-                  <View>
+                  <View style={styles.splitItem}>
                     <Text style={styles.splitLabel}>Aadil</Text>
                     <Text style={styles.splitValue} adjustsFontSizeToFit minimumFontScale={0.8} numberOfLines={1}>
                       ₹{stats.aadilTotal.toLocaleString('en-IN')}
                     </Text>
                   </View>
                   <View style={styles.splitDivider} />
-                  <View>
+                  <View style={styles.splitItem}>
                     <Text style={styles.splitLabel}>Imran</Text>
                     <Text style={styles.splitValue} adjustsFontSizeToFit minimumFontScale={0.8} numberOfLines={1}>
                       ₹{stats.imranTotal.toLocaleString('en-IN')}
+                    </Text>
+                  </View>
+                  <View style={styles.splitDivider} />
+                  <View style={styles.splitItem}>
+                    <Text style={styles.splitLabel}>DLS</Text>
+                    <Text style={styles.splitValue} adjustsFontSizeToFit minimumFontScale={0.8} numberOfLines={1}>
+                      ₹{stats.withdrawalTotal.toLocaleString('en-IN')}
                     </Text>
                   </View>
                 </View>
@@ -590,7 +610,6 @@ export default function ExpenditureScreen() {
             )}
           </View>
 
-          {/* List Content */}
           {activeTab === 'expenditures' ? (
             stats.list.length === 0 ? (
               <View style={styles.emptyState}>
@@ -613,17 +632,36 @@ export default function ExpenditureScreen() {
                       {exp.notes && (
                         <Text style={styles.cardNotes} numberOfLines={1}>{exp.notes}</Text>
                       )}
+                      
+                      {exp.locked && (
+                        <View style={styles.lockedBadgeContainer}>
+                          <Ionicons name="lock-closed" size={12} color="#10B981" />
+                          <Text style={styles.lockedBadgeText}>Managed from DLS Withdrawal</Text>
+                        </View>
+                      )}
+
                       <Text style={styles.cardPaidBy}>Paid by {exp.paid_by}</Text>
                     </View>
                   </View>
-                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
-                    <TouchableOpacity onPress={() => handleEdit(exp)} style={styles.editIconButton}>
-                      <Ionicons name="create-outline" size={16} color="#3B82F6" />
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => handleDelete(exp._id)} style={styles.deleteIconButton}>
-                      <Ionicons name="trash-outline" size={16} color="#EF4444" />
-                    </TouchableOpacity>
+
+                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, alignItems: 'center' }}>
+                    {exp.locked ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', opacity: 0.6, padding: 4 }}>
+                         <Ionicons name="eye-outline" size={16} color="#6B7280" />
+                         <Text style={{ fontSize: 12, color: '#6B7280', marginLeft: 4 }}>View Only</Text>
+                      </View>
+                    ) : (
+                      <>
+                        <TouchableOpacity onPress={() => handleEdit(exp)} style={styles.editIconButton}>
+                          <Ionicons name="create-outline" size={16} color="#3B82F6" />
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => handleDelete(exp)} style={styles.deleteIconButton}>
+                          <Ionicons name="trash-outline" size={16} color="#EF4444" />
+                        </TouchableOpacity>
+                      </>
+                    )}
                   </View>
+
                 </View>
               ))
             )
@@ -660,12 +698,11 @@ export default function ExpenditureScreen() {
           )}
         </ScrollView>
 
-        {/* Add/Edit Expenditure Modal */}
         <Modal visible={modalVisible} transparent animationType="slide">
           <View style={styles.modalOverlay}>
             <KeyboardAvoidingView 
               behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
-              style={styles.modalContent}       // ✅ एकदम सही!
+              style={styles.modalContent}
               keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 20}
             >
               <View style={styles.modalHeader}>
@@ -775,12 +812,11 @@ export default function ExpenditureScreen() {
           </View>
         </Modal>
 
-        {/* Upload Bill Modal */}
         <Modal visible={billModalVisible} transparent animationType="slide">
           <View style={styles.modalOverlay}>
             <KeyboardAvoidingView 
               behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
-              style={styles.modalContent}       // ✅ एकदम सही!
+              style={styles.modalContent}
               keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 20}
             >
               <View style={styles.modalHeader}>
@@ -885,23 +921,24 @@ const styles = StyleSheet.create({
   stickyContainer: { backgroundColor: 'rgba(255, 255, 255, 0.92)', paddingBottom: 10, paddingTop: 8 },
   filterPickerContainer: { 
     flex: 1, backgroundColor: '#fff', borderRadius: 10, 
-    minHeight: 50, /* ✅ Changed from height: 40 */
+    minHeight: 50,
     justifyContent: 'center', borderWidth: 1, borderColor: '#E5E7EB' 
   },
   pickerContainerInner: { 
     backgroundColor: '#F9FAFB', borderRadius: 8, borderWidth: 1, 
     borderColor: '#E5E7EB', overflow: 'hidden',
-    minHeight: 50, /* ✅ Added minHeight */
+    minHeight: 50,
     justifyContent: 'center'
   },
   picker: { 
-    height: 55, /* ✅ Changed from 40 to 50 */
+    height: 55,
     color: '#374151' 
   },
   summaryCard: { backgroundColor: '#1F2937', borderRadius: 15, padding: 20 },
   summaryLabel: { color: '#9CA3AF', fontSize: 12 },
   grandTotal: { color: '#fff', fontSize: 28, fontWeight: 'bold', marginTop: 4 },
   splitRow: { flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: '#374151', paddingTop: 15, marginTop: 10 },
+  splitItem: { flex: 1, alignItems: 'center' },
   splitLabel: { color: '#9CA3AF', fontSize: 11 },
   splitValue: { color: '#fff', fontSize: 16, fontWeight: 'bold', flexShrink: 1 },
   splitDivider: { width: 1, backgroundColor: '#374151', height: '100%' },
@@ -915,6 +952,8 @@ const styles = StyleSheet.create({
   cardCategory: { fontSize: 12, color: '#6B7280' },
   cardNotes: { fontSize: 12, color: '#9CA3AF', fontStyle: 'italic', marginTop: 4 },
   cardPaidBy: { fontSize: 12, color: '#6B7280', marginTop: 4 },
+  lockedBadgeContainer: { flexDirection: 'row', alignItems: 'center', marginTop: 4, marginBottom: 4, backgroundColor: '#F0FDF4', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6, alignSelf: 'flex-start' },
+  lockedBadgeText: { color: '#10B981', fontSize: 11, fontWeight: '600', marginLeft: 4 },
   editIconButton: { padding: 8, backgroundColor: 'transparent', borderRadius: 8, borderWidth: 1, borderColor: '#3B82F6' },
   deleteIconButton: { padding: 8, backgroundColor: 'transparent', borderRadius: 8, borderWidth: 1, borderColor: '#EF4444' },
   downloadIconButton: { padding: 8, backgroundColor: 'transparent', borderRadius: 8, borderWidth: 1, borderColor: '#10B981' },
@@ -941,13 +980,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB', borderRadius: 8, borderWidth: 1, 
     borderColor: '#E5E7EB', paddingVertical: 12, paddingHorizontal: 16, 
     fontSize: 16, color: '#374151',
-    minHeight: 50, /* ✅ Added minHeight */
+    minHeight: 50, 
   },
   dateButton: { 
     backgroundColor: '#F9FAFB', borderRadius: 8, borderWidth: 1, 
     borderColor: '#E5E7EB', paddingVertical: 12, paddingHorizontal: 16, 
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    minHeight: 50, /* ✅ Added minHeight */
+    minHeight: 50, 
   },
   dateButtonText: { fontSize: 16, color: '#1F2937' },
   submitButton: { backgroundColor: '#10B981', borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 8, marginBottom: 20 },
