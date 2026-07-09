@@ -42,10 +42,51 @@ interface DLS {
   date: string;
   notes?: string;
 }
+interface Withdrawal {
+  _id: string;
+  amount: number;
+  date: string;
+  month: number;
+  year: number;
+
+  withdrawn_by: string;
+
+  purpose: "personal" | "investment" | "expenditure";
+
+  category?: string;
+  subcategory?: string;
+  notes?: string;
+
+  linked_expenditure_id?: string;
+  linked_investment_id?: string;
+}
+
+interface DashboardStats {
+  total_investment: number;
+  aadil_investment: number;
+  imran_investment: number;
+
+  total_earnings: number;
+  total_expenditure: number;
+  total_dls: number;
+
+  available_dls: number;
+
+  aadil_personal_withdrawal_total: number;
+  imran_personal_withdrawal_total: number;
+
+  aadil_self_funded_expenditure_total: number;
+  imran_self_funded_expenditure_total: number;
+
+  net_profit: number;
+}
 
 export default function DLSScreen() {
   const { user } = useAuth();
   const [dlsList, setDlsList] = useState<DLS[]>([]);
+  const [activeTab, setActiveTab] = useState<'dls' | 'withdrawals'>('dls');
+  const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
+  const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -77,7 +118,41 @@ export default function DLSScreen() {
 
   useEffect(() => {
     fetchDLS();
+    fetchWithdrawals();
+    fetchDashboardStats();
   }, []);
+
+  const fetchWithdrawals = async () => {
+  try {
+    const response = await fetch(
+      `${BACKEND_URL}/api/withdrawals`
+    );
+
+    if (response.ok) {
+      const data = await response.json();
+
+      setWithdrawals(data);
+    }
+  } catch (err) {
+    console.log(err);
+  }
+  };
+
+  const fetchDashboardStats = async () => {
+    try {
+      const response = await fetch(
+        `${BACKEND_URL}/api/stats/dashboard`
+      );
+  
+      if (response.ok) {
+        const data = await response.json();
+  
+        setDashboardStats(data);
+      }
+    } catch (err) {
+      console.log(err);
+    }
+  };
 
   const fetchDLS = async () => {
     try {
@@ -93,7 +168,11 @@ export default function DLSScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchDLS();
+    await Promise.all([
+    fetchDLS(),
+    fetchWithdrawals(),
+    fetchDashboardStats(),
+  ]);
     setRefreshing(false);
   };
 
@@ -255,12 +334,84 @@ export default function DLSScreen() {
     <ImageBackground source={BACKGROUND_IMAGE} style={styles.background} resizeMode="cover">
       <View style={styles.overlay}>
         {/* Header */}
+        <View
+          style={{
+            flexDirection: 'row',
+            marginHorizontal: 16,
+            marginTop: 12,
+            backgroundColor: '#F3F4F6',
+            borderRadius: 12,
+            padding: 4,
+          }}
+        >
+        
+          <TouchableOpacity
+            onPress={() => setActiveTab('dls')}
+            style={{
+              flex: 1,
+              paddingVertical: 12,
+              borderRadius: 10,
+              backgroundColor:
+                activeTab === 'dls'
+                  ? '#10B981'
+                  : 'transparent',
+            }}
+          >
+            <Text
+              style={{
+                textAlign: 'center',
+                color:
+                  activeTab === 'dls'
+                    ? '#fff'
+                    : '#374151',
+                fontWeight: '700',
+              }}
+            >
+              Monthly DLS
+            </Text>
+          </TouchableOpacity>
+        
+          <TouchableOpacity
+            onPress={() => setActiveTab('withdrawals')}
+            style={{
+              flex: 1,
+              paddingVertical: 12,
+              borderRadius: 10,
+              backgroundColor:
+                activeTab === 'withdrawals'
+                  ? '#10B981'
+                  : 'transparent',
+            }}
+          >
+            <Text
+              style={{
+                textAlign: 'center',
+                color:
+                  activeTab === 'withdrawals'
+                    ? '#fff'
+                    : '#374151',
+                fontWeight: '700',
+              }}
+            >
+              Withdrawals
+            </Text>
+          </TouchableOpacity>
+        
+        </View>
         <View style={styles.header}>
           <View>
             <Text style={styles.title} adjustsFontSizeToFit minimumFontScale={0.8} numberOfLines={1}>Dairy Lock Sales</Text>
             <Text style={styles.subtitle} adjustsFontSizeToFit minimumFontScale={0.8} numberOfLines={1}>Actual Payments Received</Text>
           </View>
-          <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.addButton}>
+          <TouchableOpacity
+          onPress={() => {
+            if (activeTab === 'dls') {
+              setModalVisible(true);
+            } else {
+              // Withdrawal modal
+              setWithdrawalModalVisible(true);
+            }
+          }}>
             <Ionicons name="add" size={24} color="#fff" />
           </TouchableOpacity>
         </View>
