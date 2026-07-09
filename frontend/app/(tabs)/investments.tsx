@@ -56,6 +56,9 @@ interface Investment {
   investor: string;
   category: string;
   notes?: string;
+  locked?: boolean;
+  withdrawal_id?: string;
+  created_from?: string;
 }
 
 export default function InvestmentsScreen() {
@@ -178,6 +181,14 @@ export default function InvestmentsScreen() {
   };
 
   const handleEdit = (investment: Investment) => {
+    if (investment.locked) {
+      Alert.alert(
+        "Locked",
+        "This investment was created from Dairy Lock Sales Withdrawal and can only be edited from the Withdrawal screen."
+      );
+      return;
+    }
+
     setEditMode(true);
     setEditingId(investment._id);
     setAmount(investment.amount.toString());
@@ -232,9 +243,17 @@ export default function InvestmentsScreen() {
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (investment: Investment) => {
     if (!user?.name) {
       Alert.alert('Error', 'User not found');
+      return;
+    }
+
+    if (investment.locked) {
+      Alert.alert(
+        "Locked",
+        "This investment was created from Dairy Lock Sales Withdrawal and can only be deleted from the Withdrawal screen."
+      );
       return;
     }
 
@@ -246,7 +265,7 @@ export default function InvestmentsScreen() {
         onPress: async () => {
           try {
             const response = await fetch(
-              `${BACKEND_URL}/api/investments/${id}?user=${user.name}`,
+              `${BACKEND_URL}/api/investments/${investment._id}?user=${user.name}`,
               { method: 'DELETE' }
             );
             if (response.ok) {
@@ -280,10 +299,10 @@ export default function InvestmentsScreen() {
 
   // Helper to determine summary title
   const getSummaryLabel = () => {
-    if (selectedYear === 0) return 'Total Investments (All Time)';
+    if (selectedYear === 0) return 'Total Investments (Self + DLS) - All Time';
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    if (selectedMonth === 0) return `Total Investments in ${selectedYear}`;
-    return `Investments in ${monthNames[selectedMonth - 1]} ${selectedYear}`;
+    if (selectedMonth === 0) return `Total Investments (Self + DLS) - ${selectedYear}`;
+    return `Investments (Self + DLS) - ${monthNames[selectedMonth - 1]} ${selectedYear}`;
   };
 
   return (
@@ -302,11 +321,11 @@ export default function InvestmentsScreen() {
           ref={scrollViewRef}
           style={styles.content}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-          stickyHeaderIndices={[0]} // ✅ Makes the filter and summary card sticky
+          stickyHeaderIndices={[0]} 
         >
           {/* ✅ Sticky Container */}
           <View style={styles.stickyContainer}>
-            {/* ✅ Filter Row (Moved OUTSIDE Summary Card) */}
+            {/* ✅ Filter Row */}
             <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
               <View style={styles.pickerContainerOuter}>
                 <Picker 
@@ -374,14 +393,28 @@ export default function InvestmentsScreen() {
                     {inv.notes && <Text style={styles.cardNotes}>"{inv.notes}"</Text>}
                     <Text style={styles.cardInvestor}>By {inv.investor}</Text>
                   </View>
-                  <View style={{ gap: 8 }}>
-                    <TouchableOpacity onPress={() => handleEdit(inv)} style={styles.editIconButton}>
-                      <Ionicons name="create-outline" size={20} color="#3B82F6" />
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => handleDelete(inv._id)} style={styles.deleteIconButton}>
-                      <Ionicons name="trash-outline" size={20} color="#EF4444" />
-                    </TouchableOpacity>
-                  </View>
+                  
+                  {inv.locked ? (
+                    <View style={styles.lockedBadgeContainer}>
+                      <Ionicons
+                        name="lock-closed"
+                        size={14}
+                        color="#3B82F6"
+                      />
+                      <Text style={styles.lockedBadgeText}>
+                        Created from DLS Withdrawal
+                      </Text>
+                    </View>
+                  ) : (
+                    <View style={{ gap: 8 }}>
+                      <TouchableOpacity onPress={() => handleEdit(inv)} style={styles.editIconButton}>
+                        <Ionicons name="create-outline" size={20} color="#3B82F6" />
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => handleDelete(inv)} style={styles.deleteIconButton}>
+                        <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                      </TouchableOpacity>
+                    </View>
+                  )}
                 </View>
               </View>
             ))
@@ -395,10 +428,9 @@ export default function InvestmentsScreen() {
           onRequestClose={closeModal}
         >
           <View style={styles.modalOverlay}>
-            {/* ✅ Fix Point 9: Keyboard offset added */}
             <KeyboardAvoidingView 
               behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
-              style={styles.modalContent}       // ✅ एकदम सही!
+              style={styles.modalContent}       
               keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 20}
             >
               <View style={styles.modalHeader}>
@@ -504,17 +536,17 @@ const styles = StyleSheet.create({
   stickyContainer: { backgroundColor: 'rgba(255, 255, 255, 0.92)', paddingBottom: 10, paddingTop: 8 },
   pickerContainerOuter: { 
     flex: 1, backgroundColor: '#fff', borderRadius: 10, 
-    minHeight: 50, /* ✅ Changed from height: 40 */
+    minHeight: 50,
     justifyContent: 'center', borderWidth: 1, borderColor: '#E5E7EB' 
   },
   pickerContainerInner: { 
     backgroundColor: '#F9FAFB', borderRadius: 8, borderWidth: 1, 
     borderColor: '#E5E7EB', overflow: 'hidden',
-    minHeight: 50, /* ✅ Added minHeight */
+    minHeight: 50,
     justifyContent: 'center'
   },
   picker: { 
-    height: 55, /* ✅ Changed from 40 to 50 */
+    height: 55,
     color: '#374151' 
   },
   summaryCard: { backgroundColor: '#1F2937', borderRadius: 15, padding: 20 },
@@ -534,6 +566,22 @@ const styles = StyleSheet.create({
   cardCategory: { fontSize: 12, color: '#6B7280' },
   cardNotes: { fontSize: 12, color: '#9CA3AF', fontStyle: 'italic', marginTop: 4 },
   cardInvestor: { fontSize: 12, color: '#6B7280', marginTop: 4 },
+  lockedBadgeContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 12,
+    backgroundColor: "#EFF6FF",
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    alignSelf: "flex-start",
+  },
+  lockedBadgeText: {
+    color: "#3B82F6",
+    fontSize: 12,
+    fontWeight: "600",
+    marginLeft: 4,
+  },
   editIconButton: { padding: 8, backgroundColor: 'transparent', borderRadius: 8, borderWidth: 1, borderColor: '#3B82F6' },
   deleteIconButton: { padding: 8, backgroundColor: 'transparent', borderRadius: 8, borderWidth: 1, borderColor: '#EF4444' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end' },
@@ -546,13 +594,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB', borderRadius: 8, borderWidth: 1, 
     borderColor: '#E5E7EB', paddingVertical: 12, paddingHorizontal: 16, 
     fontSize: 16, color: '#374151',
-    minHeight: 50, /* ✅ Added minHeight */
+    minHeight: 50,
   },
   dateButton: { 
     backgroundColor: '#F9FAFB', borderRadius: 8, borderWidth: 1, 
     borderColor: '#E5E7EB', paddingVertical: 12, paddingHorizontal: 16, 
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    minHeight: 50, /* ✅ Added minHeight */
+    minHeight: 50,
   },
   dateButtonText: { fontSize: 16, color: '#1F2937' },
   submitButton: { backgroundColor: '#10B981', borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 8, marginBottom: 20 },
