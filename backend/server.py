@@ -386,31 +386,99 @@ async def update_withdrawal(withdrawal_id: str, withdrawal: Withdrawal):
     # ----------------------------------------
     # Remove old linked records
     # ----------------------------------------
-
-    if existing.get("linked_expenditure_id"):
-
-        await db.expenditures.delete_one(
-            {
-                "_id": ObjectId(
-                    existing["linked_expenditure_id"]
-                )
-            }
-        )
-
-    if existing.get("linked_investment_id"):
-
-        await db.investments.delete_one(
-            {
-                "_id": ObjectId(
-                    existing["linked_investment_id"]
-                )
-            }
-        )
-
+    old_purpose = existing["purpose"]
+    
     withdrawal_dict = withdrawal.dict()
-
-    withdrawal_dict["linked_expenditure_id"] = None
-    withdrawal_dict["linked_investment_id"] = None
+    
+    withdrawal_dict["linked_expenditure_id"] = existing.get(
+        "linked_expenditure_id"
+    )
+    
+    withdrawal_dict["linked_investment_id"] = existing.get(
+        "linked_investment_id"
+    )
+    
+    # ------------------------------------
+    # PURPOSE DID NOT CHANGE
+    # ------------------------------------
+    
+    if old_purpose == withdrawal.purpose:
+    
+        if withdrawal.purpose == WithdrawalPurpose.EXPENDITURE:
+    
+            await update_linked_expenditure(
+                existing["linked_expenditure_id"],
+                withdrawal,
+            )
+    
+        elif withdrawal.purpose == WithdrawalPurpose.INVESTMENT:
+    
+            await update_linked_investment(
+                existing["linked_investment_id"],
+                withdrawal,
+            )
+    
+    # ------------------------------------
+    # PURPOSE CHANGED
+    # ------------------------------------
+    
+    else:
+    
+        # Soft delete old expenditure
+    
+        if existing.get("linked_expenditure_id"):
+    
+            await db.expenditures.update_one(
+                {
+                    "_id": ObjectId(
+                        existing["linked_expenditure_id"]
+                    )
+                },
+                {
+                    "$set": {
+                        "deleted": True
+                    }
+                }
+            )
+    
+            withdrawal_dict["linked_expenditure_id"] = None
+    
+        # Soft delete old investment
+    
+        if existing.get("linked_investment_id"):
+    
+            await db.investments.update_one(
+                {
+                    "_id": ObjectId(
+                        existing["linked_investment_id"]
+                    )
+                },
+                {
+                    "$set": {
+                        "deleted": True
+                    }
+                }
+            )
+    
+            withdrawal_dict["linked_investment_id"] = None
+    
+        # Create new linked record
+    
+        if withdrawal.purpose == WithdrawalPurpose.EXPENDITURE:
+    
+            new_id = await create_linked_expenditure(
+                withdrawal
+            )
+    
+            withdrawal_dict["linked_expenditure_id"] = new_id
+    
+        elif withdrawal.purpose == WithdrawalPurpose.INVESTMENT:
+    
+            new_id = await create_linked_investment(
+                withdrawal
+            )
+    
+            withdrawal_dict["linked_investment_id"] = new_id
 
     # ----------------------------------------
     # Recreate linked record
@@ -597,6 +665,40 @@ async def delete_withdrawal(withdrawal_id: str, user: str):
     return {
         "success": True
     }
+
+async def update_linked_expenditure(
+    expenditure_id: str,
+    withdrawal: Withdrawal,
+):
+    await db.expenditures.update_one(
+        {"_id": ObjectId(expenditure_id)},
+        {
+            "$set": {
+                "amount": withdrawal.amount,
+                "date": withdrawal.date,
+                "category": withdrawal.category,
+                "subcategory": withdrawal.subcategory,
+                "notes": withdrawal.notes,
+            }
+        }
+    )
+
+
+async def update_linked_investment(
+    investment_id: str,
+    withdrawal: Withdrawal,
+):
+    await db.investments.update_one(
+        {"_id": ObjectId(investment_id)},
+        {
+            "$set": {
+                "amount": withdrawal.amount,
+                "date": withdrawal.date,
+                "category": withdrawal.category,
+                "notes": withdrawal.notes,
+            }
+        }
+    )
 # ==================== INVESTMENT ENDPOINTS ====================
 
 @api_router.post("/investments")
