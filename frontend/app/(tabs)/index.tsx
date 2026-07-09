@@ -64,6 +64,28 @@ interface Investment {
   investor: string;
 }
 
+interface DashboardStats {
+  total_investment: number;
+  aadil_investment: number;
+  imran_investment: number;
+
+  total_earnings: number;
+  total_expenditure: number;
+  total_dls: number;
+
+  net_profit: number;
+  available_dls: number;
+
+  aadil_personal_withdrawal_total: number;
+  imran_personal_withdrawal_total: number;
+
+  aadil_self_funded_expenditure_total: number;
+  imran_self_funded_expenditure_total: number;
+
+  month: number;
+  year: number;
+}
+
 const screenWidth = Dimensions.get('window').width;
 
 export default function DashboardScreen() {
@@ -76,6 +98,7 @@ export default function DashboardScreen() {
   const [expenditures, setExpenditures] = useState<Expenditure[]>([]);
   const [dlsList, setDlsList] = useState<DLS[]>([]);
   const [events, setEvents] = useState<any[]>([]);
+  const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
   
   // Modals & UI States
   const [exporting, setExporting] = useState(false);
@@ -102,14 +125,6 @@ export default function DashboardScreen() {
 
   const scrollViewRef = React.useRef<ScrollView>(null);
 
-  // useEffect(() => {
-  //   console.log("Dashboard Check - User State:", user); // <--- Dekho logout ke baad 'null' aa raha hai ya nahi
-  //   if (!isLoading && !user) {
-  //     console.log("No user found, redirecting to Login...");
-  //     router.replace('/');
-  //   }
-  // }, [user, isLoading]);
-
   useFocusEffect(
     React.useCallback(() => {
       fetchAllData();
@@ -118,12 +133,13 @@ export default function DashboardScreen() {
 
   const fetchAllData = async () => {
     try {
-      const [invRes, salesRes, expRes, dlsRes, eventsRes] = await Promise.all([
+      const [invRes, salesRes, expRes, dlsRes, eventsRes, statsRes] = await Promise.all([
         fetch(`${BACKEND_URL}/api/investments`),
         fetch(`${BACKEND_URL}/api/milk-sales`),
         fetch(`${BACKEND_URL}/api/expenditures`),
         fetch(`${BACKEND_URL}/api/dairy-lock-sales`),
-        fetch(`${BACKEND_URL}/api/events`)
+        fetch(`${BACKEND_URL}/api/events`),
+        fetch(`${BACKEND_URL}/api/stats/dashboard`)
       ]);
 
       if (invRes.ok) setInvestments(await invRes.json());
@@ -131,6 +147,7 @@ export default function DashboardScreen() {
       if (expRes.ok) setExpenditures(await expRes.json());
       if (dlsRes.ok) setDlsList(await dlsRes.json());
       if (eventsRes.ok) setEvents(await eventsRes.json());
+      if (statsRes.ok) setDashboardStats(await statsRes.json());
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -144,20 +161,7 @@ export default function DashboardScreen() {
     await fetchAllData();
   };
 
-  // 1. ALL TIME STATS
-  const allTimeStats = useMemo(() => {
-    const totalInv = investments.reduce((sum, i) => sum + Number(i.amount || 0), 0);
-    const aadilInv = investments.filter(i => i.investor === 'Aadil').reduce((sum, i) => sum + Number(i.amount || 0), 0);
-    const imranInv = investments.filter(i => i.investor === 'Imran').reduce((sum, i) => sum + Number(i.amount || 0), 0);
-    
-    const totalDlsAll = dlsList.reduce((sum, d) => sum + Number(d.amount || 0), 0);
-    const totalExpAll = expenditures.reduce((sum, e) => sum + Number(e.amount || 0), 0);
-    const netDlsAllTime = totalDlsAll - totalExpAll;
-
-    return { totalInv, aadilInv, imranInv, netDlsAllTime, totalDlsAll, totalExpAll };
-  }, [investments, dlsList, expenditures]);
-
-  // 2. MONTHLY PERFORMANCE STATS (Uses safe parseDateString)
+  // 1. MONTHLY PERFORMANCE STATS (Uses safe parseDateString)
   const perfStats = useMemo(() => {
     const earnings = milkSales.filter(s => {
       const d = parseDateString(s.date);
@@ -174,7 +178,7 @@ export default function DashboardScreen() {
     return { earnings, exp, net: earnings - exp };
   }, [milkSales, expenditures, perfMonth, perfYear]);
 
-  // 3. DAIRY LOCK SALES STATS
+  // 2. DAIRY LOCK SALES STATS
   const dlsStats = useMemo(() => {
     if (dlsFilterMonth === 0) {
       const lastMonth = currentMonth === 1 ? 12 : currentMonth - 1;
@@ -262,15 +266,12 @@ export default function DashboardScreen() {
   };
 
   const handleLogout = () => {
-      // ✅ WEB के लिए: Alert काम नहीं करता, इसलिए सीधा Browser का 'confirm' यूज़ करेंगे
       if (Platform.OS === 'web') {
         const confirmLogout = window.confirm('Are you sure you want to logout?');
         if (confirmLogout) {
-          console.log("Web Logout Triggered!"); // Debug Log
           logout();
         }
       } 
-      // 📱 MOBILE (iOS/Android) के लिए: नॉर्मल Alert
       else {
         Alert.alert('Logout', 'Are you sure you want to logout?', [
           { text: 'Cancel', style: 'cancel' },
@@ -278,8 +279,7 @@ export default function DashboardScreen() {
             text: 'Logout',
             style: 'destructive',
             onPress: () => {
-              console.log("Mobile Logout Triggered!"); // Debug Log
-              logout(); // 👈 यहाँ await की ज़रूरत नहीं है, सीधा कॉल करो
+              logout();
             },
           },
         ]);
@@ -305,8 +305,8 @@ export default function DashboardScreen() {
   <p>Generated on ${new Date().toLocaleDateString()}</p>
   
   <h2>Overall Stats (All Time)</h2>
-  <p><strong>Total Investment:</strong> ₹${allTimeStats.totalInv.toLocaleString('en-IN')}</p>
-  <p><strong>Total Net DLS:</strong> ₹${allTimeStats.netDlsAllTime.toLocaleString('en-IN')}</p>
+  <p><strong>Total Investment:</strong> ₹${(dashboardStats?.total_investment ?? 0).toLocaleString('en-IN')}</p>
+  <p><strong>Available DLS:</strong> ₹${(dashboardStats?.available_dls ?? 0).toLocaleString('en-IN')}</p>
   
   <h2>Selected Performance (${perfMonth === 0 ? 'All Year' : MONTHS[perfMonth-1]} ${perfYear})</h2>
   <p><strong>Earnings:</strong> ₹${perfStats.earnings.toLocaleString('en-IN')}</p>
@@ -372,33 +372,77 @@ export default function DashboardScreen() {
             </View>
           </View>
 
-          {/* ✅ Point 3 Fix: Imran Inv & Aadil Inv placed on the left side */}
+          {/* OVERALL DASHBOARD CARD */}
           <View style={styles.card}>
             <Text style={styles.cardTitleMerged}>Overall Dashboard (All Time)</Text>
             <View style={styles.twoColumnRow}>
               <View style={styles.halfColLeft}>
                 <Text style={styles.statLabelMerged}>Total Investment</Text>
                 <Text style={styles.mainValue} adjustsFontSizeToFit minimumFontScale={0.6} numberOfLines={1}>
-                  ₹{allTimeStats.totalInv.toLocaleString('en-IN')}
+                  ₹{(dashboardStats?.total_investment ?? 0).toLocaleString('en-IN')}
                 </Text>
                 
                 <View style={styles.subStatsContainer}>
-                  <Text style={styles.subStatText}>Aadil: ₹{allTimeStats.aadilInv.toLocaleString('en-IN')}</Text>
-                  <Text style={styles.subStatText}>Imran: ₹{allTimeStats.imranInv.toLocaleString('en-IN')}</Text>
+                  <Text style={styles.subStatText}>Aadil: ₹{(dashboardStats?.aadil_investment ?? 0).toLocaleString('en-IN')}</Text>
+                  <Text style={styles.subStatText}>Imran: ₹{(dashboardStats?.imran_investment ?? 0).toLocaleString('en-IN')}</Text>
                 </View>
               </View>
               
               <View style={styles.verticalDivider} />
               
               <View style={styles.halfColRight}>
-                <Text style={styles.statLabelMerged}>Total DLS (Net)</Text>
+                <Text style={styles.statLabelMerged}>Available DLS</Text>
                 <Text
-                  style={[styles.mainValue, allTimeStats.netDlsAllTime >= 0 ? styles.positiveValue : styles.negativeValue]}
+                  style={[styles.mainValue, (dashboardStats?.available_dls ?? 0) >= 0 ? styles.positiveValue : styles.negativeValue]}
                   adjustsFontSizeToFit minimumFontScale={0.6} numberOfLines={1}
                 >
-                  ₹{allTimeStats.netDlsAllTime.toLocaleString('en-IN')}
+                  ₹{(dashboardStats?.available_dls ?? 0).toLocaleString('en-IN')}
                 </Text>
-                <Text style={styles.netDLSSubtext} numberOfLines={1}>Total DLS - Total Exp</Text>
+                <Text style={styles.netDLSSubtext} numberOfLines={1}>Current Balance</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* PERSONAL WITHDRAWALS CARD */}
+          <View style={styles.card}>
+            <Text style={styles.cardTitleMerged}>Personal Withdrawals</Text>
+            <View style={styles.twoColumnRow}>
+              <View style={styles.halfColLeft}>
+                <Text style={styles.statLabelMerged}>Aadil</Text>
+                <Text style={styles.mainValue} adjustsFontSizeToFit minimumFontScale={0.6} numberOfLines={1}>
+                  ₹{(dashboardStats?.aadil_personal_withdrawal_total ?? 0).toLocaleString('en-IN')}
+                </Text>
+              </View>
+              
+              <View style={styles.verticalDivider} />
+              
+              <View style={styles.halfColRight}>
+                <Text style={styles.statLabelMerged}>Imran</Text>
+                <Text style={styles.mainValue} adjustsFontSizeToFit minimumFontScale={0.6} numberOfLines={1}>
+                  ₹{(dashboardStats?.imran_personal_withdrawal_total ?? 0).toLocaleString('en-IN')}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* SELF FUNDED EXPENDITURE CARD */}
+          <View style={styles.card}>
+            <Text style={styles.cardTitleMerged}>Self Funded Expenditure</Text>
+            <View style={styles.twoColumnRow}>
+              <View style={styles.halfColLeft}>
+                <Text style={styles.statLabelMerged}>Aadil</Text>
+                <Text style={styles.mainValue} adjustsFontSizeToFit minimumFontScale={0.6} numberOfLines={1}>
+                  ₹{(dashboardStats?.aadil_self_funded_expenditure_total ?? 0).toLocaleString('en-IN')}
+                </Text>
+              </View>
+              
+              <View style={styles.verticalDivider} />
+              
+              <View style={styles.halfColRight}>
+                <Text style={styles.statLabelMerged}>Imran</Text>
+                <Text style={styles.mainValue} adjustsFontSizeToFit minimumFontScale={0.6} numberOfLines={1}>
+                  ₹{(dashboardStats?.imran_self_funded_expenditure_total ?? 0).toLocaleString('en-IN')}
+                </Text>
               </View>
             </View>
           </View>
