@@ -856,12 +856,16 @@ export default function DLSScreen() {
                 />
               ) : (
                 <TouchableOpacity
+                  disabled={loading}
                   onPress={
                     withdrawalEditMode
                       ? handleUpdateWithdrawal
                       : handleAddWithdrawal
                   }
-                  style={styles.submitButton}
+                  style={[
+                    styles.submitButton,
+                    loading && { opacity: 0.6 },
+                  ]}
                 >
                   <Text style={styles.submitButtonText}>
                     {withdrawalEditMode
