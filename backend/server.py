@@ -500,6 +500,103 @@ async def update_withdrawal(withdrawal_id: str, withdrawal: Withdrawal):
     return {
         "success": True
     }
+
+@api_router.delete("/withdrawals/{withdrawal_id}")
+async def delete_withdrawal(withdrawal_id: str, user: str):
+
+    withdrawal = await db.withdrawals.find_one(
+        {"_id": ObjectId(withdrawal_id)}
+    )
+
+    if not withdrawal:
+        raise HTTPException(
+            status_code=404,
+            detail="Withdrawal not found"
+        )
+
+    # ----------------------------------------
+    # Soft delete linked Expenditure
+    # ----------------------------------------
+
+    if withdrawal.get("linked_expenditure_id"):
+
+        await db.expenditures.update_one(
+            {
+                "_id": ObjectId(
+                    withdrawal["linked_expenditure_id"]
+                )
+            },
+            {
+                "$set": {
+                    "deleted": True
+                }
+            }
+        )
+
+    # ----------------------------------------
+    # Soft delete linked Investment
+    # ----------------------------------------
+
+    if withdrawal.get("linked_investment_id"):
+
+        await db.investments.update_one(
+            {
+                "_id": ObjectId(
+                    withdrawal["linked_investment_id"]
+                )
+            },
+            {
+                "$set": {
+                    "deleted": True
+                }
+            }
+        )
+
+    # ----------------------------------------
+    # Soft delete Withdrawal
+    # ----------------------------------------
+
+    await db.withdrawals.update_one(
+        {
+            "_id": ObjectId(withdrawal_id)
+        },
+        {
+            "$set": {
+                "deleted": True
+            }
+        }
+    )
+
+    # ----------------------------------------
+    # Notification
+    # ----------------------------------------
+
+    notif = Notification(
+        type="deletion",
+        data={
+            "type": "withdrawal",
+            "id": withdrawal_id
+        },
+        message=f"{user} removed DLS Withdrawal of ₹{withdrawal['amount']:,.0f}"
+    )
+
+    await db.notifications.insert_one(
+        notif.dict()
+    )
+
+    await send_push_notification(
+        user,
+        "Withdrawal Deleted",
+        f"{user} removed DLS Withdrawal of ₹{withdrawal['amount']:,.0f}",
+        {
+            "screen": "/(tabs)/wrx",
+            "type": "withdrawal"
+        }
+    )
+
+    return {
+        "success": True
+    }
 # ==================== INVESTMENT ENDPOINTS ====================
 
 @api_router.post("/investments")
