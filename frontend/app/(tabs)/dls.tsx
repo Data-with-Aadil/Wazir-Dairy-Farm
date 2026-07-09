@@ -389,21 +389,300 @@ export default function DLSScreen() {
     ]);
   };
 
-  // ==================== Placeholder Backend Functions for Withdrawals ====================
+  // ==================== Backend Functions for Withdrawals ====================
   const handleAddWithdrawal = async () => {
-    // TODO: Implement later
+    if (!withdrawalAmount) {
+      Alert.alert("Error", "Please enter amount");
+      return;
+    }
+
+    const amount = parseFloat(withdrawalAmount);
+
+    if (isNaN(amount) || amount <= 0) {
+      Alert.alert("Error", "Please enter a valid amount");
+      return;
+    }
+
+    if (
+      withdrawalPurpose === "expenditure" &&
+      withdrawalCategory === ""
+    ) {
+      Alert.alert("Error", "Please select category");
+      return;
+    }
+
+    if (
+      withdrawalPurpose === "expenditure" &&
+      withdrawalSubcategory === ""
+    ) {
+      Alert.alert("Error", "Please select subcategory");
+      return;
+    }
+
+    if (
+      withdrawalPurpose === "investment" &&
+      withdrawalCategory === ""
+    ) {
+      Alert.alert("Error", "Please select investment category");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await fetch(
+        `${BACKEND_URL}/api/withdrawals`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            amount,
+
+            date: `${withdrawalDate.getFullYear()}-${String(
+              withdrawalDate.getMonth() + 1
+            ).padStart(2, "0")}-${String(
+              withdrawalDate.getDate()
+            ).padStart(2, "0")}`,
+
+            month: withdrawalDate.getMonth() + 1,
+
+            year: withdrawalDate.getFullYear(),
+
+            withdrawn_by: withdrawnBy,
+
+            purpose: withdrawalPurpose,
+
+            category:
+              withdrawalPurpose === "personal"
+                ? null
+                : withdrawalCategory,
+
+            subcategory:
+              withdrawalPurpose === "expenditure"
+                ? withdrawalSubcategory
+                : null,
+
+            notes:
+              withdrawalNotes.trim() === ""
+                ? null
+                : withdrawalNotes.trim(),
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        Alert.alert(
+          "Error",
+          data.detail || "Failed to add withdrawal"
+        );
+        return;
+      }
+
+      Alert.alert(
+        "Success",
+        "Withdrawal added successfully"
+      );
+
+      closeWithdrawalModal();
+
+      await Promise.all([
+        fetchDLS(),
+        fetchWithdrawals(),
+        fetchDashboardStats(),
+      ]);
+
+    } catch (err) {
+      console.log(err);
+      Alert.alert("Error", "Network error");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleUpdateWithdrawal = async () => {
-    // TODO: Implement later
+    if (!editingWithdrawalId) return;
+
+    if (!withdrawalAmount) {
+      Alert.alert("Error", "Please enter amount");
+      return;
+    }
+
+    const amount = parseFloat(withdrawalAmount);
+
+    if (isNaN(amount) || amount <= 0) {
+      Alert.alert("Error", "Please enter valid amount");
+      return;
+    }
+
+    if (
+      withdrawalPurpose === "expenditure" &&
+      withdrawalCategory === ""
+    ) {
+      Alert.alert("Error", "Please select category");
+      return;
+    }
+
+    if (
+      withdrawalPurpose === "expenditure" &&
+      withdrawalSubcategory === ""
+    ) {
+      Alert.alert("Error", "Please select subcategory");
+      return;
+    }
+
+    if (
+      withdrawalPurpose === "investment" &&
+      withdrawalCategory === ""
+    ) {
+      Alert.alert("Error", "Please select investment category");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await fetch(
+        `${BACKEND_URL}/api/withdrawals/${editingWithdrawalId}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            amount,
+
+            date: `${withdrawalDate.getFullYear()}-${String(
+              withdrawalDate.getMonth() + 1
+            ).padStart(2, "0")}-${String(
+              withdrawalDate.getDate()
+            ).padStart(2, "0")}`,
+
+            month: withdrawalDate.getMonth() + 1,
+
+            year: withdrawalDate.getFullYear(),
+
+            withdrawn_by: withdrawnBy,
+
+            purpose: withdrawalPurpose,
+
+            category:
+              withdrawalPurpose === "personal"
+                ? null
+                : withdrawalCategory,
+
+            subcategory:
+              withdrawalPurpose === "expenditure"
+                ? withdrawalSubcategory
+                : null,
+
+            notes:
+              withdrawalNotes.trim() === ""
+                ? null
+                : withdrawalNotes.trim(),
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        Alert.alert(
+          "Error",
+          data.detail || "Failed to update withdrawal"
+        );
+        return;
+      }
+
+      Alert.alert(
+        "Success",
+        "Withdrawal updated successfully"
+      );
+
+      closeWithdrawalModal();
+
+      await Promise.all([
+        fetchDLS(),
+        fetchWithdrawals(),
+        fetchDashboardStats(),
+      ]);
+    } catch (err) {
+      console.log(err);
+      Alert.alert("Error", "Network error");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleEditWithdrawal = (withdrawal: Withdrawal) => {
-    // TODO: Implement later
+    setWithdrawalEditMode(true);
+    setEditingWithdrawalId(withdrawal._id);
+    setWithdrawnBy(withdrawal.withdrawn_by);
+    setWithdrawalPurpose(withdrawal.purpose);
+    setWithdrawalCategory(withdrawal.category || "");
+    setWithdrawalSubcategory(withdrawal.subcategory || "");
+    setWithdrawalAmount(withdrawal.amount.toString());
+    setWithdrawalNotes(withdrawal.notes || "");
+    setWithdrawalDate(new Date(withdrawal.date));
+    setWithdrawalModalVisible(true);
   };
 
   const handleDeleteWithdrawal = async (id: string) => {
-    // TODO: Implement later
+    Alert.alert(
+      "Delete Withdrawal",
+      "Are you sure you want to delete this withdrawal?",
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setLoading(true);
+  
+              const response = await fetch(
+                `${BACKEND_URL}/api/withdrawals/${id}`,
+                {
+                  method: "DELETE",
+                }
+              );
+  
+              const data = await response.json();
+  
+              if (!response.ok) {
+                Alert.alert(
+                  "Error",
+                  data.detail || "Delete failed"
+                );
+                return;
+              }
+  
+              Alert.alert(
+                "Success",
+                "Withdrawal deleted successfully"
+              );
+  
+              await Promise.all([
+                fetchDLS(),
+                fetchWithdrawals(),
+                fetchDashboardStats(),
+              ]);
+            } catch (err) {
+              console.log(err);
+              Alert.alert("Error", "Network error");
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const resetForm = () => {
@@ -668,7 +947,7 @@ export default function DLSScreen() {
               {loading ? <ActivityIndicator size="large" color="#10B981" style={{ marginTop: 20 }} /> : 
                 <TouchableOpacity
                 disabled={loading}
-                onPress={...}
+                onPress={editMode ? handleUpdateDLS : handleAddDLS}
                 style={[
                     styles.submitButton,
                     loading && { opacity: 0.6 }
@@ -678,7 +957,6 @@ export default function DLSScreen() {
               }
             </KeyboardAvoidingView>
           </View>
-          </ImageBackground>
         </Modal>
 
         <Modal
