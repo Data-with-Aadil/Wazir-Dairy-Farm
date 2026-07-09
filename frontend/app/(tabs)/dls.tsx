@@ -672,6 +672,7 @@ export default function DLSScreen() {
               }
             </KeyboardAvoidingView>
           </View>
+          </ImageBackground>
         </Modal>
 
         <Modal
