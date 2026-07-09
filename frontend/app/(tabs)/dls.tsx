@@ -389,6 +389,23 @@ export default function DLSScreen() {
     ]);
   };
 
+  // ==================== Placeholder Backend Functions for Withdrawals ====================
+  const handleAddWithdrawal = async () => {
+    // TODO: Implement later
+  };
+
+  const handleUpdateWithdrawal = async () => {
+    // TODO: Implement later
+  };
+
+  const handleEditWithdrawal = (withdrawal: Withdrawal) => {
+    // TODO: Implement later
+  };
+
+  const handleDeleteWithdrawal = async (id: string) => {
+    // TODO: Implement later
+  };
+
   const resetForm = () => {
     const now = new Date();
     setMonth((now.getMonth() + 1).toString());
@@ -656,6 +673,207 @@ export default function DLSScreen() {
             </KeyboardAvoidingView>
           </View>
         </Modal>
+
+        <Modal
+          visible={withdrawalModalVisible}
+          transparent
+          animationType="slide"
+        >
+          <View style={styles.modalOverlay}>
+            <KeyboardAvoidingView
+              behavior={Platform.OS === "ios" ? "padding" : undefined}
+              style={styles.modalContent}
+              keyboardVerticalOffset={Platform.OS === "ios" ? 64 : 20}
+            >
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>
+                  {withdrawalEditMode ? "Edit Withdrawal" : "Add Withdrawal"}
+                </Text>
+                <TouchableOpacity onPress={closeWithdrawalModal}>
+                  <Ionicons name="close" size={24} color="#6B7280" />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 80 }}
+              >
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Withdrawn By</Text>
+                  <View style={styles.pickerContainerInner}>
+                    <Picker
+                      selectedValue={withdrawnBy}
+                      onValueChange={(value) => setWithdrawnBy(value)}
+                      style={styles.picker}
+                    >
+                      <Picker.Item label="Aadil" value="Aadil" />
+                      <Picker.Item label="Imran" value="Imran" />
+                    </Picker>
+                  </View>
+                </View>
+
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Purpose</Text>
+                  <View style={styles.pickerContainerInner}>
+                    <Picker
+                      selectedValue={withdrawalPurpose}
+                      onValueChange={(value) => {
+                        setWithdrawalPurpose(value);
+                        setWithdrawalCategory("");
+                        setWithdrawalSubcategory("");
+                      }}
+                      style={styles.picker}
+                    >
+                      <Picker.Item label="Personal" value="personal" />
+                      <Picker.Item label="Business Expenditure" value="expenditure" />
+                      <Picker.Item label="Business Investment" value="investment" />
+                    </Picker>
+                  </View>
+                </View>
+
+                {withdrawalPurpose === "expenditure" && (
+                  <View style={styles.formGroup}>
+                    <Text style={styles.label}>Category</Text>
+                    <View style={styles.pickerContainerInner}>
+                      <Picker
+                        selectedValue={withdrawalCategory}
+                        onValueChange={(value) => {
+                          setWithdrawalCategory(value);
+                          setWithdrawalSubcategory("");
+                        }}
+                        style={styles.picker}
+                      >
+                        <Picker.Item label="Select Category" value="" />
+                        {Object.keys(EXPENDITURE_CATEGORIES).map((cat) => (
+                          <Picker.Item key={cat} label={cat} value={cat} />
+                        ))}
+                      </Picker>
+                    </View>
+                  </View>
+                )}
+
+                {withdrawalPurpose === "expenditure" && withdrawalCategory !== "" && (
+                  <View style={styles.formGroup}>
+                    <Text style={styles.label}>Subcategory</Text>
+                    <View style={styles.pickerContainerInner}>
+                      <Picker
+                        selectedValue={withdrawalSubcategory}
+                        onValueChange={(value) => setWithdrawalSubcategory(value)}
+                        style={styles.picker}
+                      >
+                        <Picker.Item label="Select Subcategory" value="" />
+                        {EXPENDITURE_CATEGORIES[withdrawalCategory].map((sub) => (
+                          <Picker.Item key={sub} label={sub} value={sub} />
+                        ))}
+                      </Picker>
+                    </View>
+                  </View>
+                )}
+
+                {withdrawalPurpose === "investment" && (
+                  <View style={styles.formGroup}>
+                    <Text style={styles.label}>Investment Category</Text>
+                    <View style={styles.pickerContainerInner}>
+                      <Picker
+                        selectedValue={withdrawalCategory}
+                        onValueChange={(value) => setWithdrawalCategory(value)}
+                        style={styles.picker}
+                      >
+                        <Picker.Item label="Select Category" value="" />
+                        {INVESTMENT_CATEGORIES.map((cat) => (
+                          <Picker.Item key={cat} label={cat} value={cat} />
+                        ))}
+                      </Picker>
+                    </View>
+                  </View>
+                )}
+
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Amount (₹)</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={withdrawalAmount}
+                    onChangeText={setWithdrawalAmount}
+                    keyboardType="numeric"
+                    placeholder="0"
+                    placeholderTextColor="#9CA3AF"
+                  />
+                </View>
+                
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Withdrawal Date</Text>
+                  <TouchableOpacity
+                    onPress={() => setShowWithdrawalDatePicker(true)}
+                    style={styles.dateButton}
+                  >
+                    <Ionicons
+                      name="calendar-outline"
+                      size={20}
+                      color="#6B7280"
+                    />
+                    <Text style={styles.dateButtonText}>
+                      {withdrawalDate.toLocaleDateString("en-GB")}
+                    </Text>
+                  </TouchableOpacity>
+                  {showWithdrawalDatePicker && (
+                    <DateTimePicker
+                      value={withdrawalDate}
+                      mode="date"
+                      display="default"
+                      maximumDate={new Date()}
+                      onChange={onWithdrawalDateChange}
+                    />
+                  )}
+                </View>
+                
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Notes (Optional)</Text>
+                  <TextInput
+                    style={[
+                      styles.input,
+                      {
+                        minHeight: 80,
+                      },
+                    ]}
+                    value={withdrawalNotes}
+                    onChangeText={setWithdrawalNotes}
+                    placeholder="Optional notes"
+                    placeholderTextColor="#9CA3AF"
+                    multiline
+                    textAlignVertical="top"
+                  />
+                </View>
+
+              </ScrollView>
+              
+              {loading ? (
+                <ActivityIndicator
+                  size="large"
+                  color="#10B981"
+                  style={{ marginTop: 20 }}
+                />
+              ) : (
+                <TouchableOpacity
+                  onPress={
+                    withdrawalEditMode
+                      ? handleUpdateWithdrawal
+                      : handleAddWithdrawal
+                  }
+                  style={styles.submitButton}
+                >
+                  <Text style={styles.submitButtonText}>
+                    {withdrawalEditMode
+                      ? "Update Withdrawal"
+                      : "Add Withdrawal"}
+                  </Text>
+                </TouchableOpacity>
+              )}
+
+            </KeyboardAvoidingView>
+          </View>
+        </Modal>
+
       </View>
     </ImageBackground>
   );
