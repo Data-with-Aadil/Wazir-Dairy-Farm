@@ -329,7 +329,7 @@ async def create_linked_expenditure(withdrawal: Withdrawal):
         category=withdrawal.category,
         subcategory=withdrawal.subcategory,
         notes=withdrawal.notes,
-        created_from=EntrySource.WITHDRAWAL,
+        created_from: EntrySource = EntrySource.MANUAL,
         withdrawal_id=None,
         locked=True,
     )
@@ -345,7 +345,7 @@ async def create_linked_investment(withdrawal: Withdrawal):
         investor="Withdrawal",
         category=withdrawal.category,
         notes=withdrawal.notes,
-        created_from=EntrySource.WITHDRAWAL,
+        created_from: EntrySource = EntrySource.MANUAL,
         withdrawal_id=None,
         locked=True,
     )
