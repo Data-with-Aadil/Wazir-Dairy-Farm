@@ -197,8 +197,8 @@ class Withdrawal(BaseModel):
     subcategory: Optional[str] = None
     notes: Optional[str] = None
 
-    linked_collection: Optional[str] = None
-    linked_id: Optional[str] = None
+    linked_expenditure_id: Optional[str] = None
+    linked_investment_id: Optional[str] = None
 
     deleted: bool = False
     created_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
@@ -479,22 +479,6 @@ async def update_withdrawal(withdrawal_id: str, withdrawal: Withdrawal):
             )
     
             withdrawal_dict["linked_investment_id"] = new_id
-
-    # ----------------------------------------
-    # Recreate linked record
-    # ----------------------------------------
-
-    if withdrawal.purpose == WithdrawalPurpose.EXPENDITURE:
-
-        expenditure_id = await create_linked_expenditure(withdrawal)
-
-        withdrawal_dict["linked_expenditure_id"] = expenditure_id
-
-    elif withdrawal.purpose == WithdrawalPurpose.INVESTMENT:
-
-        investment_id = await create_linked_investment(withdrawal)
-
-        withdrawal_dict["linked_investment_id"] = investment_id
 
     # ----------------------------------------
     # Save withdrawal
@@ -1417,6 +1401,7 @@ async def cleanup_test_data():
         await db.expenditures.delete_many({})
         await db.milk_sales.delete_many({})
         await db.dairy_lock_sales.delete_many({})
+        await db.withdrawals.delete_many({})
         await db.bills.delete_many({})
         await db.notifications.delete_many({})
         
