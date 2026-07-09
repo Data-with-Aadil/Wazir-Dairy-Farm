@@ -666,7 +666,13 @@ export default function DLSScreen() {
                 </View>
               </ScrollView>
               {loading ? <ActivityIndicator size="large" color="#10B981" style={{ marginTop: 20 }} /> : 
-                <TouchableOpacity onPress={editMode ? handleUpdateDLS : handleAddDLS} style={styles.submitButton}>
+                <TouchableOpacity
+                disabled={loading}
+                onPress={...}
+                style={[
+                    styles.submitButton,
+                    loading && { opacity: 0.6 }
+                ]}>
                   <Text style={styles.submitButtonText}>{editMode ? 'Update Payment' : 'Add Payment'}</Text>
                 </TouchableOpacity>
               }
