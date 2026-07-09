@@ -143,7 +143,6 @@ class WithdrawalPurpose(str, Enum):
     INVESTMENT = "investment"
     PERSONAL = "personal"
 
-
 class EntrySource(str, Enum):
     MANUAL = "manual"
     WITHDRAWAL = "withdrawal"
@@ -329,14 +328,13 @@ async def create_linked_expenditure(withdrawal: Withdrawal):
         category=withdrawal.category,
         subcategory=withdrawal.subcategory,
         notes=withdrawal.notes,
-        created_from: EntrySource = EntrySource.MANUAL,
+        created_from=EntrySource.WITHDRAWAL,
         withdrawal_id=None,
         locked=True,
     )
 
     result = await db.expenditures.insert_one(expenditure.dict())
     return str(result.inserted_id)
-
 
 async def create_linked_investment(withdrawal: Withdrawal):
     investment = Investment(
@@ -345,7 +343,7 @@ async def create_linked_investment(withdrawal: Withdrawal):
         investor="Withdrawal",
         category=withdrawal.category,
         notes=withdrawal.notes,
-        created_from: EntrySource = EntrySource.MANUAL,
+        created_from=EntrySource.WITHDRAWAL,
         withdrawal_id=None,
         locked=True,
     )
@@ -355,6 +353,25 @@ async def create_linked_investment(withdrawal: Withdrawal):
 
 @api_router.patch("/withdrawals/{withdrawal_id}")
 async def update_withdrawal(withdrawal_id: str, withdrawal: Withdrawal):
+
+    # Validation
+    if (
+        withdrawal.purpose == WithdrawalPurpose.EXPENDITURE
+        and (not withdrawal.category or not withdrawal.subcategory)
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Category and subcategory required for business expenditure."
+        )
+
+    if (
+        withdrawal.purpose == WithdrawalPurpose.INVESTMENT
+        and not withdrawal.category
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Investment category required for business investment."
+        )
 
     existing = await db.withdrawals.find_one(
         {"_id": ObjectId(withdrawal_id)}
@@ -667,7 +684,6 @@ async def update_linked_expenditure(
         }
     )
 
-
 async def update_linked_investment(
     investment_id: str,
     withdrawal: Withdrawal,
@@ -892,19 +908,19 @@ async def delete_expenditure(expenditure_id: str, user: str):
 # ==================== MILK SALES ENDPOINTS ====================
 
 @api_router.post("/milk-sales")
-async def create_milk_sale(sale: MilkSale, user: str): # 👈 यहाँ user: str ऐड किया
+async def create_milk_sale(sale: MilkSale, user: str):
     result = await db.milk_sales.insert_one(sale.dict())
     notif = Notification(
         type="milk_sale",
         data=sale.dict(),
-        message=f"{user} added Milk Sale for {sale.date} - {sale.volume}L at {sale.fat_percentage}% fat, Rate: ₹{sale.rate} = ₹{sale.earnings:,.0f}" # 👈 'System' को 'user' से बदला
+        message=f"{user} added Milk Sale for {sale.date} - {sale.volume}L at {sale.fat_percentage}% fat, Rate: ₹{sale.rate} = ₹{sale.earnings:,.0f}" 
     )
     await db.notifications.insert_one(notif.dict())
     
     await send_push_notification(
-        user, # 👈 'System' को 'user' से बदला
+        user,
         "New Milk Sale",
-        f"{user} added Milk Sale for {sale.date} - ₹{sale.earnings:,.0f}", # 👈 'System' को 'user' से बदला
+        f"{user} added Milk Sale for {sale.date} - ₹{sale.earnings:,.0f}", 
         {"screen": "/(tabs)/wrx", "type": "milk_sale"}
     )
     
@@ -972,19 +988,19 @@ async def delete_milk_sale(sale_id: str, user: str):
 # ==================== DAIRY LOCK SALES ENDPOINTS ====================
 
 @api_router.post("/dairy-lock-sales")
-async def create_dls(dls: DairyLockSale, user: str): # 👈 यहाँ user: str ऐड किया
+async def create_dls(dls: DairyLockSale, user: str):
     result = await db.dairy_lock_sales.insert_one(dls.dict())
     notif = Notification(
         type="dls",
         data=dls.dict(),
-        message=f"{user} added Dairy Lock Sale for {dls.month}/{dls.year} - ₹{dls.amount:,.0f} on {dls.date}" # 👈 'System' को 'user' से बदला
+        message=f"{user} added Dairy Lock Sale for {dls.month}/{dls.year} - ₹{dls.amount:,.0f} on {dls.date}" 
     )
     await db.notifications.insert_one(notif.dict())
     
     await send_push_notification(
-        user, # 👈 'System' को 'user' से बदला
+        user,
         "New DLS Payment",
-        f"{user} added Dairy Lock Sale for {dls.month}/{dls.year} - ₹{dls.amount:,.0f}", # 👈 'System' को 'user' से बदला
+        f"{user} added Dairy Lock Sale for {dls.month}/{dls.year} - ₹{dls.amount:,.0f}", 
         {"screen": "/(tabs)/wrx", "type": "dls"}
     )
     
@@ -1000,6 +1016,15 @@ async def update_dls(dls_id: str, dls: DairyLockSale, user: str):
     existing_dls = await db.dairy_lock_sales.find_one({"_id": ObjectId(dls_id)})
     if not existing_dls:
         raise HTTPException(status_code=404, detail="DLS not found")
+        
+    # Prevent updating DLS if it reduces available balance below 0
+    balance = await calculate_available_dls()
+    diff = dls.amount - float(existing_dls.get("amount", 0))
+    if balance["available_dls"] + diff < 0:
+        raise HTTPException(
+            status_code=400, 
+            detail="Cannot update: This reduces available DLS balance below zero."
+        )
     
     await db.dairy_lock_sales.update_one(
         {"_id": ObjectId(dls_id)},
@@ -1027,6 +1052,14 @@ async def delete_dls(dls_id: str, user: str):
     dls = await db.dairy_lock_sales.find_one({"_id": ObjectId(dls_id)})
     if not dls:
         raise HTTPException(status_code=404, detail="DLS not found")
+        
+    # Prevent deleting DLS if it reduces available balance below 0
+    balance = await calculate_available_dls()
+    if balance["available_dls"] - float(dls.get("amount", 0)) < 0:
+        raise HTTPException(
+            status_code=400, 
+            detail="Cannot delete: This reduces available DLS balance below zero."
+        )
     
     await db.dairy_lock_sales.update_one(
         {"_id": ObjectId(dls_id)},
@@ -1051,10 +1084,27 @@ async def delete_dls(dls_id: str, user: str):
 
 # ==================== WITHDRAWAL ENDPOINTS ====================
 
-# ==================== WITHDRAWAL ENDPOINTS ====================
-
 @api_router.post("/withdrawals")
 async def create_withdrawal(withdrawal: Withdrawal):
+    
+    # Validation
+    if (
+        withdrawal.purpose == WithdrawalPurpose.EXPENDITURE
+        and (not withdrawal.category or not withdrawal.subcategory)
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Category and subcategory required for business expenditure."
+        )
+
+    if (
+        withdrawal.purpose == WithdrawalPurpose.INVESTMENT
+        and not withdrawal.category
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Investment category required for business investment."
+        )
 
     # Validate Available DLS
     balance = await calculate_available_dls()
