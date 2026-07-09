@@ -1288,41 +1288,162 @@ async def get_dashboard_stats(month: Optional[int] = None, year: Optional[int] =
         target_year = year if year is not None else now.year
 
         start_date = datetime(target_year, target_month, 1).strftime("%Y-%m-%d")
+
         if target_month == 12:
             end_date = datetime(target_year + 1, 1, 1).strftime("%Y-%m-%d")
         else:
             end_date = datetime(target_year, target_month + 1, 1).strftime("%Y-%m-%d")
 
-        date_filter = {"date": {"$gte": start_date, "$lt": end_date}, "deleted": {"$ne": True}}
+        date_filter = {
+            "date": {
+                "$gte": start_date,
+                "$lt": end_date
+            },
+            "deleted": {"$ne": True}
+        }
+
+        # ==========================================================
+        # MONTHLY EXPENDITURE
+        # ==========================================================
 
         exp_docs = await db.expenditures.find(date_filter).to_list(1000)
-        total_exp = sum(float(d.get("amount", 0)) for d in exp_docs)
+
+        total_exp = sum(
+            float(d.get("amount", 0))
+            for d in exp_docs
+        )
+
+        # ==========================================================
+        # MONTHLY MILK SALES
+        # ==========================================================
 
         milk_docs = await db.milk_sales.find(date_filter).to_list(1000)
-        total_earn = sum(float(d.get("earnings", 0)) for d in milk_docs)
 
-        # 🚨 FIX: Changed 'db.dls' to 'db.dairy_lock_sales' so that your dashboard gets the real data!
+        total_earn = sum(
+            float(d.get("earnings", 0))
+            for d in milk_docs
+        )
+
+        # ==========================================================
+        # MONTHLY DLS
+        # ==========================================================
+
         dls_docs = await db.dairy_lock_sales.find(date_filter).to_list(1000)
-        total_dls = sum(float(d.get("amount", 0)) for d in dls_docs)
 
-        inv_docs = await db.investments.find({"deleted": {"$ne": True}}).to_list(1000)
-        total_inv = sum(float(d.get("amount", 0)) for d in inv_docs)
-        aadil_inv = sum(float(d.get("amount", 0)) for d in inv_docs if d.get("investor") == "Aadil")
-        imran_inv = sum(float(d.get("amount", 0)) for d in inv_docs if d.get("investor") == "Imran")
+        total_dls = sum(
+            float(d.get("amount", 0))
+            for d in dls_docs
+        )
+
+        # ==========================================================
+        # INVESTMENTS (ALL TIME)
+        # ==========================================================
+
+        inv_docs = await db.investments.find(
+            {"deleted": {"$ne": True}}
+        ).to_list(1000)
+
+        total_inv = sum(
+            float(d.get("amount", 0))
+            for d in inv_docs
+        )
+
+        aadil_inv = sum(
+            float(d.get("amount", 0))
+            for d in inv_docs
+            if d.get("investor") == "Aadil"
+        )
+
+        imran_inv = sum(
+            float(d.get("amount", 0))
+            for d in inv_docs
+            if d.get("investor") == "Imran"
+        )
+
+        # ==========================================================
+        # ALL WITHDRAWALS
+        # ==========================================================
+
+        withdrawal_docs = await db.withdrawals.find(
+            {"deleted": {"$ne": True}}
+        ).to_list(1000)
+
+        aadil_personal_withdrawal = sum(
+            float(d.get("amount", 0))
+            for d in withdrawal_docs
+            if d.get("withdrawn_by") == "Aadil"
+            and d.get("purpose") == "personal"
+        )
+
+        imran_personal_withdrawal = sum(
+            float(d.get("amount", 0))
+            for d in withdrawal_docs
+            if d.get("withdrawn_by") == "Imran"
+            and d.get("purpose") == "personal"
+        )
+
+        # ==========================================================
+        # SELF FUNDED EXPENDITURE (ALL TIME)
+        # Only manual expenditure entries
+        # ==========================================================
+
+        all_exp_docs = await db.expenditures.find(
+            {"deleted": {"$ne": True}}
+        ).to_list(1000)
+
+        aadil_self_funded_expenditure = sum(
+            float(d.get("amount", 0))
+            for d in all_exp_docs
+            if d.get("paid_by") == "Aadil"
+        )
+
+        imran_self_funded_expenditure = sum(
+            float(d.get("amount", 0))
+            for d in all_exp_docs
+            if d.get("paid_by") == "Imran"
+        )
+
+        # ==========================================================
+        # AVAILABLE DLS (ALL TIME)
+        # ==========================================================
+
+        dls_balance = await calculate_available_dls()
 
         return {
+
+            # Existing fields (UNCHANGED)
+
             "total_investment": total_inv,
             "aadil_investment": aadil_inv,
             "imran_investment": imran_inv,
+
             "total_earnings": total_earn,
             "total_expenditure": total_exp,
             "total_dls": total_dls,
+
             "net_profit": total_earn - total_exp,
+
             "month": target_month,
-            "year": target_year
+            "year": target_year,
+
+            # -------------------------------
+            # NEW FIELDS
+            # -------------------------------
+
+            "available_dls": dls_balance["available_dls"],
+
+            "aadil_personal_withdrawal_total": aadil_personal_withdrawal,
+            "imran_personal_withdrawal_total": imran_personal_withdrawal,
+
+            "aadil_self_funded_expenditure_total": aadil_self_funded_expenditure,
+            "imran_self_funded_expenditure_total": imran_self_funded_expenditure,
         }
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
 
 # ==================== CALENDAR EVENT ENDPOINTS ====================
 
