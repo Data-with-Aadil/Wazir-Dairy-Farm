@@ -130,7 +130,9 @@ export default function DLSScreen() {
   const [withdrawalModalVisible, setWithdrawalModalVisible] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   
-  const [loading, setLoading] = useState(false);
+  const [loadingDLS, setLoadingDLS] = useState(false);
+  const [loadingWithdrawal, setLoadingWithdrawal] = useState(false);
+  
   const [refreshing, setRefreshing] = useState(false);
   const scrollViewRef = React.useRef<ScrollView>(null);
 
@@ -273,7 +275,7 @@ export default function DLSScreen() {
       return;
     }
 
-    setLoading(true);
+    setLoadingDLS(true);
     try {
       const response = await fetch(`${BACKEND_URL}/api/dairy-lock-sales?user=${user?.name}`, {
         method: 'POST',
@@ -300,7 +302,7 @@ export default function DLSScreen() {
     } catch (error) {
       Alert.alert('Error', 'Failed to add DLS');
     } finally {
-      setLoading(false);
+      setLoadingDLS(false);
     }
   };
 
@@ -327,7 +329,7 @@ export default function DLSScreen() {
       return;
     }
 
-    setLoading(true);
+    setLoadingDLS(true);
     try {
       const response = await fetch(`${BACKEND_URL}/api/dairy-lock-sales/${editingId}?user=${user?.name}`, {
         method: 'PATCH',
@@ -358,7 +360,7 @@ export default function DLSScreen() {
     } catch (error) {
       Alert.alert('Error', 'Failed to update DLS');
     } finally {
-      setLoading(false);
+      setLoadingDLS(false);
     }
   };
 
@@ -370,6 +372,7 @@ export default function DLSScreen() {
         style: 'destructive',
         onPress: async () => {
           try {
+            setLoadingDLS(true);
             const response = await fetch(
               `${BACKEND_URL}/api/dairy-lock-sales/${id}?user=${user?.name}`,
               { method: 'DELETE' }
@@ -383,6 +386,8 @@ export default function DLSScreen() {
             }
           } catch (error) {
             Alert.alert('Error', 'Failed to delete entry');
+          } finally {
+            setLoadingDLS(false);
           }
         },
       },
@@ -427,11 +432,11 @@ export default function DLSScreen() {
       return;
     }
 
-    setLoading(true);
+    setLoadingWithdrawal(true);
 
     try {
       const response = await fetch(
-        `${BACKEND_URL}/api/withdrawals`,
+        `${BACKEND_URL}/api/withdrawals?user=${user?.name}`,
         {
           method: "POST",
           headers: {
@@ -499,7 +504,7 @@ export default function DLSScreen() {
       console.log(err);
       Alert.alert("Error", "Network error");
     } finally {
-      setLoading(false);
+      setLoadingWithdrawal(false);
     }
   };
 
@@ -542,11 +547,11 @@ export default function DLSScreen() {
       return;
     }
 
-    setLoading(true);
+    setLoadingWithdrawal(true);
 
     try {
       const response = await fetch(
-        `${BACKEND_URL}/api/withdrawals/${editingWithdrawalId}`,
+        `${BACKEND_URL}/api/withdrawals/${editingWithdrawalId}?user=${user?.name}`,
         {
           method: "PATCH",
           headers: {
@@ -613,7 +618,7 @@ export default function DLSScreen() {
       console.log(err);
       Alert.alert("Error", "Network error");
     } finally {
-      setLoading(false);
+      setLoadingWithdrawal(false);
     }
   };
 
@@ -644,10 +649,10 @@ export default function DLSScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              setLoading(true);
+              setLoadingWithdrawal(true);
   
               const response = await fetch(
-                `${BACKEND_URL}/api/withdrawals/${id}`,
+                `${BACKEND_URL}/api/withdrawals/${id}?user=${user?.name}`,
                 {
                   method: "DELETE",
                 }
@@ -677,7 +682,7 @@ export default function DLSScreen() {
               console.log(err);
               Alert.alert("Error", "Network error");
             } finally {
-              setLoading(false);
+              setLoadingWithdrawal(false);
             }
           },
         },
@@ -890,9 +895,55 @@ export default function DLSScreen() {
                             </Text>
                           )}
                         </View>
-                        <View style={{ alignItems: 'flex-end' }}>
-                          <Text style={{ fontWeight: "bold", fontSize: 20, color: amountColor }}>₹{Number(item.amount).toLocaleString("en-IN")}</Text>
-                          <Text style={{ color: "#9CA3AF", marginTop: 2, fontSize: 12 }}>{item.date}</Text>
+                        <View style={{ alignItems: "flex-end" }}>
+                          <Text
+                            style={{
+                              fontWeight: "bold",
+                              fontSize: 20,
+                              color: amountColor,
+                            }}
+                          >
+                            ₹{Number(item.amount).toLocaleString("en-IN")}
+                          </Text>
+                          <Text
+                            style={{
+                              color: "#9CA3AF",
+                              marginTop: 2,
+                              fontSize: 12,
+                            }}
+                          >
+                            {item.date}
+                          </Text>
+                          <View
+                            style={{
+                              flexDirection: "row",
+                              marginTop: 12,
+                              gap: 8,
+                            }}
+                          >
+                            <TouchableOpacity
+                              onPress={() => handleEditWithdrawal(item)}
+                              style={styles.editIconButton}
+                            >
+                              <Ionicons
+                                name="create-outline"
+                                size={18}
+                                color="#3B82F6"
+                              />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              onPress={() =>
+                                handleDeleteWithdrawal(item._id)
+                              }
+                              style={styles.deleteIconButton}
+                            >
+                              <Ionicons
+                                name="trash-outline"
+                                size={18}
+                                color="#EF4444"
+                              />
+                            </TouchableOpacity>
+                          </View>
                         </View>
                       </View>
                     </View>
@@ -944,13 +995,13 @@ export default function DLSScreen() {
                   <TextInput style={[styles.input, { minHeight: 80 }]} value={notes} onChangeText={setNotes} placeholder="Optional notes" placeholderTextColor="#9CA3AF" multiline textAlignVertical="top" />
                 </View>
               </ScrollView>
-              {loading ? <ActivityIndicator size="large" color="#10B981" style={{ marginTop: 20 }} /> : 
+              {loadingDLS ? <ActivityIndicator size="large" color="#10B981" style={{ marginTop: 20 }} /> : 
                 <TouchableOpacity
-                disabled={loading}
+                disabled={loadingDLS}
                 onPress={editMode ? handleUpdateDLS : handleAddDLS}
                 style={[
                     styles.submitButton,
-                    loading && { opacity: 0.6 }
+                    loadingDLS && { opacity: 0.6 }
                 ]}>
                   <Text style={styles.submitButtonText}>{editMode ? 'Update Payment' : 'Add Payment'}</Text>
                 </TouchableOpacity>
@@ -1132,7 +1183,7 @@ export default function DLSScreen() {
 
               </ScrollView>
               
-              {loading ? (
+              {loadingWithdrawal ? (
                 <ActivityIndicator
                   size="large"
                   color="#10B981"
@@ -1140,7 +1191,7 @@ export default function DLSScreen() {
                 />
               ) : (
                 <TouchableOpacity
-                  disabled={loading}
+                  disabled={loadingWithdrawal}
                   onPress={
                     withdrawalEditMode
                       ? handleUpdateWithdrawal
@@ -1148,7 +1199,7 @@ export default function DLSScreen() {
                   }
                   style={[
                     styles.submitButton,
-                    loading && { opacity: 0.6 },
+                    loadingWithdrawal && { opacity: 0.6 },
                   ]}
                 >
                   <Text style={styles.submitButtonText}>
