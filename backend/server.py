@@ -320,6 +320,38 @@ async def calculate_available_dls():
         "total_withdrawn": total_withdrawn,
         "available_dls": total_dls - total_withdrawn
     }
+
+async def create_linked_expenditure(withdrawal: Withdrawal):
+    expenditure = Expenditure(
+        amount=withdrawal.amount,
+        date=withdrawal.date,
+        paid_by="Withdrawal",
+        category=withdrawal.category,
+        subcategory=withdrawal.subcategory,
+        notes=withdrawal.notes,
+        created_from=EntrySource.WITHDRAWAL,
+        withdrawal_id=None,
+        locked=True,
+    )
+
+    result = await db.expenditures.insert_one(expenditure.dict())
+    return str(result.inserted_id)
+
+
+async def create_linked_investment(withdrawal: Withdrawal):
+    investment = Investment(
+        amount=withdrawal.amount,
+        date=withdrawal.date,
+        investor="Withdrawal",
+        category=withdrawal.category,
+        notes=withdrawal.notes,
+        created_from=EntrySource.WITHDRAWAL,
+        withdrawal_id=None,
+        locked=True,
+    )
+
+    result = await db.investments.insert_one(investment.dict())
+    return str(result.inserted_id)
 # ==================== INVESTMENT ENDPOINTS ====================
 
 @api_router.post("/investments")
@@ -688,10 +720,12 @@ async def delete_dls(dls_id: str, user: str):
 
 # ==================== WITHDRAWAL ENDPOINTS ====================
 
+# ==================== WITHDRAWAL ENDPOINTS ====================
+
 @api_router.post("/withdrawals")
 async def create_withdrawal(withdrawal: Withdrawal):
 
-    # Check Available DLS
+    # Validate Available DLS
     balance = await calculate_available_dls()
 
     if withdrawal.amount > balance["available_dls"]:
@@ -702,14 +736,133 @@ async def create_withdrawal(withdrawal: Withdrawal):
 
     withdrawal_dict = withdrawal.dict()
 
+    withdrawal_dict["linked_expenditure_id"] = None
+    withdrawal_dict["linked_investment_id"] = None
+
+    # -------------------------------
+    # BUSINESS EXPENDITURE
+    # -------------------------------
+
+    if withdrawal.purpose == WithdrawalPurpose.EXPENDITURE:
+
+        expenditure_id = await create_linked_expenditure(withdrawal)
+
+        withdrawal_dict["linked_expenditure_id"] = expenditure_id
+
+    # -------------------------------
+    # BUSINESS INVESTMENT
+    # -------------------------------
+
+    elif withdrawal.purpose == WithdrawalPurpose.INVESTMENT:
+
+        investment_id = await create_linked_investment(withdrawal)
+
+        withdrawal_dict["linked_investment_id"] = investment_id
+
+    # -------------------------------
+    # PERSONAL
+    # -------------------------------
+
     result = await db.withdrawals.insert_one(withdrawal_dict)
 
     withdrawal_id = str(result.inserted_id)
 
+    # ------------------------------------
+    # Update linked records with withdrawal_id
+    # ------------------------------------
+
+    if withdrawal_dict["linked_expenditure_id"]:
+
+        await db.expenditures.update_one(
+            {
+                "_id": ObjectId(
+                    withdrawal_dict["linked_expenditure_id"]
+                )
+            },
+            {
+                "$set": {
+                    "withdrawal_id": withdrawal_id
+                }
+            }
+        )
+
+    if withdrawal_dict["linked_investment_id"]:
+
+        await db.investments.update_one(
+            {
+                "_id": ObjectId(
+                    withdrawal_dict["linked_investment_id"]
+                )
+            },
+            {
+                "$set": {
+                    "withdrawal_id": withdrawal_id
+                }
+            }
+        )
+
+    # ------------------------------------
+    # Notification
+    # ------------------------------------
+
+    if withdrawal.purpose == WithdrawalPurpose.PERSONAL:
+
+        message = (
+            f"{withdrawal.withdrawn_by} withdrew ₹{withdrawal.amount:,.0f} "
+            f"for Personal Use"
+        )
+
+    elif withdrawal.purpose == WithdrawalPurpose.EXPENDITURE:
+
+        message = (
+            f"{withdrawal.withdrawn_by} withdrew ₹{withdrawal.amount:,.0f} "
+            f"for {withdrawal.category}/{withdrawal.subcategory}"
+        )
+
+    else:
+
+        message = (
+            f"{withdrawal.withdrawn_by} withdrew ₹{withdrawal.amount:,.0f} "
+            f"for Investment - {withdrawal.category}"
+        )
+
+    notif = Notification(
+        type="withdrawal",
+        data=withdrawal_dict,
+        message=message,
+    )
+
+    await db.notifications.insert_one(notif.dict())
+
+    await send_push_notification(
+        withdrawal.withdrawn_by,
+        "New DLS Withdrawal",
+        message,
+        {
+            "screen": "/(tabs)/wrx",
+            "type": "withdrawal",
+        },
+    )
+
     return {
         "success": True,
-        "withdrawal_id": withdrawal_id
+        "id": withdrawal_id,
     }
+
+
+@api_router.get("/withdrawals")
+async def get_withdrawals(deleted: bool = False):
+
+    withdrawals = await db.withdrawals.find(
+        {
+            "deleted": deleted
+        }
+    ).sort("created_at", -1).to_list(1000)
+
+    return [
+        serialize_doc(x)
+        for x in withdrawals
+    ]
 
 # ==================== BILLS ENDPOINTS ====================
 
