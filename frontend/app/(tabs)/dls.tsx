@@ -35,50 +35,27 @@ const YEARS = Array.from(
 );
 
 const EXPENDITURE_CATEGORIES: Record<string, string[]> = {
+  Supplements: [
+    'Mineral Mixture', 'Calcium', 'Bypass Fat', 'Bypass Protein', 
+    'Yeast Culture', 'Toxin Binder', 'Liver Tonic', 'Probiotics', 
+    'Electrolytes', 'Others',
+  ],
+  Fodder: ['Sukha Chara', 'Hara Chara', 'Silage', 'Others'],
   Feed: [
-    "Cotton Khal",
-    "Soybean Khal",
-    "Kapila Feed",
-    "Green Fodder",
-    "Dry Fodder",
-    "Mineral Mixture",
-    "Others",
+    'Gud', 'Makka', 'Gehu Churi', 'Chana Churi', 'Jowar', 
+    'Bajra', 'Binola', 'Soybean Khal', 'Mustard Khal', 
+    'Groundnut Khal', 'Salt', 'Soda', 'Others',
   ],
-  Labour: [
-    "Salary",
-    "Bonus",
-    "Advance",
-    "Others",
-  ],
-  Electricity: [
-    "Electric Bill",
-    "Repair",
-    "Others",
-  ],
-  Medical: [
-    "Medicine",
-    "Doctor",
-    "Vaccination",
-    "Others",
-  ],
-  Transport: [
-    "Fuel",
-    "Vehicle Repair",
-    "Others",
-  ],
-  Miscellaneous: [
-    "Others",
-  ],
+  Others: ['Labour', 'Electricity', 'Veterinary', 'Transport', 'Maintenance', 'Others'],
 };
 
 const INVESTMENT_CATEGORIES = [
-  "Animal Purchase",
-  "Land",
-  "Construction",
-  "Machinery",
-  "Vehicle",
-  "Equipment",
-  "Others",
+  'Shed / Infrastructure',
+  'Buffalo Purchase',
+  'Machinery',
+  'Equipment',
+  'Land',
+  'Others',
 ];
 
 interface DLS {
@@ -1076,7 +1053,7 @@ export default function DLSScreen() {
                         selectedValue={withdrawalCategory}
                         onValueChange={(value) => {
                           setWithdrawalCategory(value);
-                          setWithdrawalSubcategory("");
+                          setWithdrawalSubcategory(EXPENDITURE_CATEGORIES[value]?.[0] || "");
                         }}
                         style={styles.picker}
                       >
