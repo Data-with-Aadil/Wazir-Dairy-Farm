@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 from bson import ObjectId
 import httpx
 from pytz import timezone
+from enum import Enum
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -137,22 +138,68 @@ class UpdatePushToken(BaseModel):
     name: str
     expo_push_token: str
 
+class WithdrawalPurpose(str, Enum):
+    EXPENDITURE = "expenditure"
+    INVESTMENT = "investment"
+    PERSONAL = "personal"
+
+
+class EntrySource(str, Enum):
+    MANUAL = "manual"
+    WITHDRAWAL = "withdrawal"
+
 class Investment(BaseModel):
     amount: float
     date: str
+
     investor: str
+
     category: str
     notes: Optional[str] = None
+
+    created_from: str = "manual"
+    withdrawal_id: Optional[str] = None
+    locked: bool = False
+
     deleted: bool = False
     created_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
 
 class Expenditure(BaseModel):
     amount: float
     date: str
+
     paid_by: str
+
     category: str
     subcategory: str
+
     notes: Optional[str] = None
+
+    created_from: str = "manual"
+    withdrawal_id: Optional[str] = None
+    locked: bool = False
+
+    deleted: bool = False
+    created_at: Optional[datetime] = Field(default_factory=datetime.utcnow
+
+class Withdrawal(BaseModel):
+    amount: float
+
+    date: str
+    month: int
+    year: int
+
+    withdrawn_by: str
+
+    purpose: WithdrawalPurpose
+
+    category: Optional[str] = None
+    subcategory: Optional[str] = None
+    notes: Optional[str] = None
+
+    linked_collection: Optional[str] = None
+    linked_id: Optional[str] = None
+
     deleted: bool = False
     created_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
 
@@ -239,80 +286,141 @@ async def update_push_token(data: UpdatePushToken):
     )
     logging.info(f"✅ Updated push token for {data.name}")
     return {"success": True}
+    
+# ==================== WITHDRAWAL HELPERS ====================
 
+async def calculate_available_dls():
+    """
+    Calculates currently available DLS balance.
+
+    Available DLS =
+    Total Dairy Lock Sales
+    - Business Expenditure Withdrawals
+    - Business Investment Withdrawals
+    - Personal Withdrawals
+    """
+
+    dls_docs = await db.dairy_lock_sales.find(
+        {"deleted": False}
+    ).to_list(100000)
+
+    total_dls = sum(float(x.get("amount", 0)) for x in dls_docs)
+
+    withdrawal_docs = await db.withdrawals.find(
+        {"deleted": False}
+    ).to_list(100000)
+
+    total_withdrawn = sum(
+        float(x.get("amount", 0))
+        for x in withdrawal_docs
+    )
+
+    return {
+        "total_dls": total_dls,
+        "total_withdrawn": total_withdrawn,
+        "available_dls": total_dls - total_withdrawn
+    }
 # ==================== INVESTMENT ENDPOINTS ====================
 
 @api_router.post("/investments")
 async def create_investment(investment: Investment):
     result = await db.investments.insert_one(investment.dict())
+
     notif = Notification(
         type="investment",
         data=investment.dict(),
         message=f"{investment.investor} added Investment - {investment.category} - ₹{investment.amount:,.0f} on {investment.date}"
     )
     await db.notifications.insert_one(notif.dict())
-    
+
     await send_push_notification(
         investment.investor,
         "New Investment Added",
         f"{investment.investor} added Investment - {investment.category} - ₹{investment.amount:,.0f}",
         {"screen": "/(tabs)/wrx", "type": "investment"}
     )
-    
+
     return {"success": True, "id": str(result.inserted_id)}
+
 
 @api_router.put("/investments/{investment_id}")
 async def update_investment(investment_id: str, investment: Investment):
+
+    existing = await db.investments.find_one({"_id": ObjectId(investment_id)})
+
+    if not existing:
+        raise HTTPException(status_code=404, detail="Investment not found")
+
+    if existing.get("locked", False):
+        raise HTTPException(
+            status_code=400,
+            detail="This investment was created from DLS Withdrawal and can only be edited from the Withdrawal section."
+        )
+
     await db.investments.update_one(
         {"_id": ObjectId(investment_id)},
         {"$set": investment.dict()}
     )
+
     notif = Notification(
         type="investment",
         data=investment.dict(),
         message=f"{investment.investor} updated Investment - {investment.category} - ₹{investment.amount:,.0f} on {investment.date}"
     )
     await db.notifications.insert_one(notif.dict())
-    
+
     await send_push_notification(
         investment.investor,
         "Investment Updated",
         f"{investment.investor} updated Investment - {investment.category} - ₹{investment.amount:,.0f}",
         {"screen": "/(tabs)/wrx", "type": "investment"}
     )
-    
+
     return {"success": True}
+
 
 @api_router.get("/investments")
 async def get_investments(deleted: bool = False):
-    investments = await db.investments.find({"deleted": deleted}).sort("created_at", -1).to_list(1000)
+    investments = await db.investments.find(
+        {"deleted": deleted}
+    ).sort("created_at", -1).to_list(1000)
+
     return [serialize_doc(inv) for inv in investments]
+
 
 @api_router.delete("/investments/{investment_id}")
 async def delete_investment(investment_id: str, user: str):
+
     inv = await db.investments.find_one({"_id": ObjectId(investment_id)})
+
     if not inv:
         raise HTTPException(status_code=404, detail="Investment not found")
-    
+
+    if inv.get("locked", False):
+        raise HTTPException(
+            status_code=400,
+            detail="This investment was created from DLS Withdrawal and can only be deleted from the Withdrawal section."
+        )
+
     await db.investments.update_one(
         {"_id": ObjectId(investment_id)},
         {"$set": {"deleted": True}}
     )
-    
+
     notif = Notification(
         type="deletion",
         data={"type": "investment", "id": investment_id},
         message=f"{user} removed Investment entry - {inv['category']} - ₹{inv['amount']:,.0f} on {inv['date']}"
     )
     await db.notifications.insert_one(notif.dict())
-    
+
     await send_push_notification(
         user,
         "Investment Deleted",
         f"{user} removed Investment - {inv['category']} - ₹{inv['amount']:,.0f}",
         {"screen": "/(tabs)/wrx", "type": "deletion"}
     )
-    
+
     return {"success": True}
 
 # ==================== EXPENDITURE ENDPOINTS ====================
@@ -320,79 +428,102 @@ async def delete_investment(investment_id: str, user: str):
 @api_router.post("/expenditures")
 async def create_expenditure(expenditure: Expenditure):
     result = await db.expenditures.insert_one(expenditure.dict())
+
     notif = Notification(
         type="expenditure",
         data=expenditure.dict(),
         message=f"{expenditure.paid_by} added Expenditure - {expenditure.category}/{expenditure.subcategory} - ₹{expenditure.amount:,.0f} on {expenditure.date}"
     )
     await db.notifications.insert_one(notif.dict())
-    
+
     await send_push_notification(
         expenditure.paid_by,
         "New Expenditure Added",
         f"{expenditure.paid_by} added Expenditure - {expenditure.category}/{expenditure.subcategory} - ₹{expenditure.amount:,.0f}",
         {"screen": "/(tabs)/wrx", "type": "expenditure"}
     )
-    
+
     return {"success": True, "id": str(result.inserted_id)}
+
 
 @api_router.get("/expenditures")
 async def get_expenditures(deleted: bool = False):
-    expenditures = await db.expenditures.find({"deleted": deleted}).sort("created_at", -1).to_list(1000)
+    expenditures = await db.expenditures.find(
+        {"deleted": deleted}
+    ).sort("created_at", -1).to_list(1000)
+
     return [serialize_doc(exp) for exp in expenditures]
+
 
 @api_router.patch("/expenditures/{expenditure_id}")
 async def update_expenditure(expenditure_id: str, expenditure: Expenditure, user: str):
+
     exp = await db.expenditures.find_one({"_id": ObjectId(expenditure_id)})
+
     if not exp:
         raise HTTPException(status_code=404, detail="Expenditure not found")
-    
+
+    if exp.get("locked", False):
+        raise HTTPException(
+            status_code=400,
+            detail="This expenditure was created from DLS Withdrawal and can only be edited from the Withdrawal section."
+        )
+
     await db.expenditures.update_one(
         {"_id": ObjectId(expenditure_id)},
         {"$set": expenditure.dict(exclude_unset=True)}
     )
-    
+
     notif = Notification(
         type="expenditure",
         data=expenditure.dict(),
         message=f"{user} updated Expenditure - {expenditure.category}/{expenditure.subcategory} - ₹{expenditure.amount:,.0f} on {expenditure.date}"
     )
     await db.notifications.insert_one(notif.dict())
-    
+
     await send_push_notification(
         user,
         "Expenditure Updated",
         f"{user} updated Expenditure - {expenditure.category}/{expenditure.subcategory} - ₹{expenditure.amount:,.0f}",
         {"screen": "/(tabs)/wrx", "type": "expenditure"}
     )
-    
+
     return {"success": True}
+
 
 @api_router.delete("/expenditures/{expenditure_id}")
 async def delete_expenditure(expenditure_id: str, user: str):
+
     exp = await db.expenditures.find_one({"_id": ObjectId(expenditure_id)})
+
     if not exp:
         raise HTTPException(status_code=404, detail="Expenditure not found")
-    
+
+    if exp.get("locked", False):
+        raise HTTPException(
+            status_code=400,
+            detail="This expenditure was created from DLS Withdrawal and can only be deleted from the Withdrawal section."
+        )
+
     await db.expenditures.update_one(
         {"_id": ObjectId(expenditure_id)},
         {"$set": {"deleted": True}}
     )
-    
+
     notif = Notification(
         type="deletion",
         data={"type": "expenditure", "id": expenditure_id},
         message=f"{user} removed Expenditure entry - {exp['category']}/{exp['subcategory']} - ₹{exp['amount']:,.0f} on {exp['date']}"
     )
     await db.notifications.insert_one(notif.dict())
-    
+
     await send_push_notification(
         user,
         "Expenditure Deleted",
         f"{user} removed Expenditure - {exp['category']}/{exp['subcategory']} - ₹{exp['amount']:,.0f}",
         {"screen": "/(tabs)/wrx", "type": "deletion"}
     )
-    
+
     return {"success": True}
 
 # ==================== MILK SALES ENDPOINTS ====================
@@ -554,6 +685,31 @@ async def delete_dls(dls_id: str, user: str):
     )
     
     return {"success": True}
+
+# ==================== WITHDRAWAL ENDPOINTS ====================
+
+@api_router.post("/withdrawals")
+async def create_withdrawal(withdrawal: Withdrawal):
+
+    # Check Available DLS
+    balance = await calculate_available_dls()
+
+    if withdrawal.amount > balance["available_dls"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Only ₹{balance['available_dls']:,.2f} is available in DLS."
+        )
+
+    withdrawal_dict = withdrawal.dict()
+
+    result = await db.withdrawals.insert_one(withdrawal_dict)
+
+    withdrawal_id = str(result.inserted_id)
+
+    return {
+        "success": True,
+        "withdrawal_id": withdrawal_id
+    }
 
 # ==================== BILLS ENDPOINTS ====================
 
