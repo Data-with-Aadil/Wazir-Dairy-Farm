@@ -20,6 +20,15 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { useAuth } from '../../context/AuthContext';
 import { useFocusEffect } from 'expo-router';
 
+// ✅ Custom Alert Helper for proper Web Support!
+const showAlert = (title: string, message: string) => {
+  if (Platform.OS === 'web') {
+    window.alert(`${title}: ${message}`);
+  } else {
+    Alert.alert(title, message);
+  }
+};
+
 const BACKGROUND_IMAGE = require('../../assets/images/0vjmy7gj_1000044672.jpg');
 const BACKEND_URL = "https://wazir-dairy-farm-1.onrender.com";
 
@@ -242,13 +251,13 @@ export default function DLSScreen() {
 
   const handleAddDLS = async () => {
     if (!amount) {
-      Alert.alert('Error', 'Please enter amount');
+      showAlert('Error', 'Please enter amount');
       return;
     }
 
     const amt = parseFloat(amount);
     if (isNaN(amt)) {
-      Alert.alert('Error', 'Please enter valid amount');
+      showAlert('Error', 'Please enter valid amount');
       return;
     }
 
@@ -267,7 +276,7 @@ export default function DLSScreen() {
       });
 
       if (response.ok) {
-        Alert.alert('Success', 'Dairy Lock Sale added successfully');
+        showAlert('Success', 'Dairy Lock Sale added successfully');
         setModalVisible(false);
         resetForm();
         await Promise.all([
@@ -277,7 +286,7 @@ export default function DLSScreen() {
         ]);
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to add DLS');
+      showAlert('Error', 'Failed to add DLS');
     } finally {
       setLoadingDLS(false);
     }
@@ -296,13 +305,13 @@ export default function DLSScreen() {
 
   const handleUpdateDLS = async () => {
     if (!amount || !editingId) {
-      Alert.alert('Error', 'Please enter amount');
+      showAlert('Error', 'Please enter amount');
       return;
     }
 
     const amt = parseFloat(amount);
     if (isNaN(amt)) {
-      Alert.alert('Error', 'Please enter valid amount');
+      showAlert('Error', 'Please enter valid amount');
       return;
     }
 
@@ -321,7 +330,7 @@ export default function DLSScreen() {
       });
 
       if (response.ok) {
-        Alert.alert('Success', 'DLS updated successfully');
+        showAlert('Success', 'DLS updated successfully');
         setModalVisible(false);
         setEditMode(false);
         setEditingId(null);
@@ -332,56 +341,52 @@ export default function DLSScreen() {
           fetchDashboardStats(),
         ]);
       } else {
-        Alert.alert('Error', 'Update failed');
+        showAlert('Error', 'Update failed');
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to update DLS');
+      showAlert('Error', 'Failed to update DLS');
     } finally {
       setLoadingDLS(false);
     }
   };
 
   const handleDelete = async (id: string) => {
-    Alert.alert('Delete Entry', 'Are you sure you want to delete this entry?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            setLoadingDLS(true);
-            const response = await fetch(
-              `${BACKEND_URL}/api/dairy-lock-sales/${id}?user=${user?.name}`,
-              { method: 'DELETE' }
-            );
-            if (response.ok) {
-              await Promise.all([
-                fetchDLS(),
-                fetchWithdrawals(),
-                fetchDashboardStats(),
-              ]);
-            }
-          } catch (error) {
-            Alert.alert('Error', 'Failed to delete entry');
-          } finally {
-            setLoadingDLS(false);
-          }
-        },
-      },
-    ]);
+    if (Platform.OS === 'web') {
+      const confirm = window.confirm("Are you sure you want to delete this entry?");
+      if (confirm) executeDeleteDLS(id);
+    } else {
+      Alert.alert('Delete Entry', 'Are you sure you want to delete this entry?', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => executeDeleteDLS(id) },
+      ]);
+    }
+  };
+
+  const executeDeleteDLS = async (id: string) => {
+    try {
+      setLoadingDLS(true);
+      const response = await fetch(`${BACKEND_URL}/api/dairy-lock-sales/${id}?user=${user?.name}`, { method: 'DELETE' });
+      if (response.ok) {
+        await Promise.all([fetchDLS(), fetchWithdrawals(), fetchDashboardStats()]);
+      }
+    } catch (error) {
+      showAlert('Error', 'Failed to delete entry');
+    } finally {
+      setLoadingDLS(false);
+    }
   };
 
   // ==================== Backend Functions for Withdrawals ====================
   const handleAddWithdrawal = async () => {
     if (!withdrawalAmount) {
-      Alert.alert("Error", "Please enter amount");
+      showAlert("Error", "Please enter amount");
       return;
     }
 
     const amount = parseFloat(withdrawalAmount);
 
     if (isNaN(amount) || amount <= 0) {
-      Alert.alert("Error", "Please enter a valid amount");
+      showAlert("Error", "Please enter a valid amount");
       return;
     }
 
@@ -389,7 +394,7 @@ export default function DLSScreen() {
       withdrawalPurpose === "expenditure" &&
       withdrawalCategory === ""
     ) {
-      Alert.alert("Error", "Please select category");
+      showAlert("Error", "Please select category");
       return;
     }
 
@@ -397,7 +402,7 @@ export default function DLSScreen() {
       withdrawalPurpose === "expenditure" &&
       withdrawalSubcategory === ""
     ) {
-      Alert.alert("Error", "Please select subcategory");
+      showAlert("Error", "Please select subcategory");
       return;
     }
 
@@ -405,7 +410,7 @@ export default function DLSScreen() {
       withdrawalPurpose === "investment" &&
       withdrawalCategory === ""
     ) {
-      Alert.alert("Error", "Please select investment category");
+      showAlert("Error", "Please select investment category");
       return;
     }
 
@@ -421,35 +426,18 @@ export default function DLSScreen() {
           },
           body: JSON.stringify({
             amount,
-
             date: `${withdrawalDate.getFullYear()}-${String(
               withdrawalDate.getMonth() + 1
             ).padStart(2, "0")}-${String(
               withdrawalDate.getDate()
             ).padStart(2, "0")}`,
-
             month: withdrawalDate.getMonth() + 1,
-
             year: withdrawalDate.getFullYear(),
-
             withdrawn_by: withdrawnBy,
-
             purpose: withdrawalPurpose,
-
-            category:
-              withdrawalPurpose === "personal"
-                ? null
-                : withdrawalCategory,
-
-            subcategory:
-              withdrawalPurpose === "expenditure"
-                ? withdrawalSubcategory
-                : null,
-
-            notes:
-              withdrawalNotes.trim() === ""
-                ? null
-                : withdrawalNotes.trim(),
+            category: withdrawalPurpose === "personal" ? null : withdrawalCategory,
+            subcategory: withdrawalPurpose === "expenditure" ? withdrawalSubcategory : null,
+            notes: withdrawalNotes.trim() === "" ? null : withdrawalNotes.trim(),
           }),
         }
       );
@@ -457,18 +445,11 @@ export default function DLSScreen() {
       const data = await response.json();
 
       if (!response.ok) {
-        Alert.alert(
-          "Error",
-          data.detail || "Failed to add withdrawal"
-        );
+        showAlert("Error", data.detail || "Failed to add withdrawal");
         return;
       }
 
-      Alert.alert(
-        "Success",
-        "Withdrawal added successfully"
-      );
-
+      showAlert("Success", "Withdrawal added successfully");
       closeWithdrawalModal();
 
       await Promise.all([
@@ -479,7 +460,7 @@ export default function DLSScreen() {
 
     } catch (err) {
       console.log(err);
-      Alert.alert("Error", "Network error");
+      showAlert("Error", "Network error");
     } finally {
       setLoadingWithdrawal(false);
     }
@@ -489,14 +470,14 @@ export default function DLSScreen() {
     if (!editingWithdrawalId) return;
 
     if (!withdrawalAmount) {
-      Alert.alert("Error", "Please enter amount");
+      showAlert("Error", "Please enter amount");
       return;
     }
 
     const amount = parseFloat(withdrawalAmount);
 
     if (isNaN(amount) || amount <= 0) {
-      Alert.alert("Error", "Please enter valid amount");
+      showAlert("Error", "Please enter valid amount");
       return;
     }
 
@@ -504,7 +485,7 @@ export default function DLSScreen() {
       withdrawalPurpose === "expenditure" &&
       withdrawalCategory === ""
     ) {
-      Alert.alert("Error", "Please select category");
+      showAlert("Error", "Please select category");
       return;
     }
 
@@ -512,7 +493,7 @@ export default function DLSScreen() {
       withdrawalPurpose === "expenditure" &&
       withdrawalSubcategory === ""
     ) {
-      Alert.alert("Error", "Please select subcategory");
+      showAlert("Error", "Please select subcategory");
       return;
     }
 
@@ -520,7 +501,7 @@ export default function DLSScreen() {
       withdrawalPurpose === "investment" &&
       withdrawalCategory === ""
     ) {
-      Alert.alert("Error", "Please select investment category");
+      showAlert("Error", "Please select investment category");
       return;
     }
 
@@ -536,35 +517,18 @@ export default function DLSScreen() {
           },
           body: JSON.stringify({
             amount,
-
             date: `${withdrawalDate.getFullYear()}-${String(
               withdrawalDate.getMonth() + 1
             ).padStart(2, "0")}-${String(
               withdrawalDate.getDate()
             ).padStart(2, "0")}`,
-
             month: withdrawalDate.getMonth() + 1,
-
             year: withdrawalDate.getFullYear(),
-
             withdrawn_by: withdrawnBy,
-
             purpose: withdrawalPurpose,
-
-            category:
-              withdrawalPurpose === "personal"
-                ? null
-                : withdrawalCategory,
-
-            subcategory:
-              withdrawalPurpose === "expenditure"
-                ? withdrawalSubcategory
-                : null,
-
-            notes:
-              withdrawalNotes.trim() === ""
-                ? null
-                : withdrawalNotes.trim(),
+            category: withdrawalPurpose === "personal" ? null : withdrawalCategory,
+            subcategory: withdrawalPurpose === "expenditure" ? withdrawalSubcategory : null,
+            notes: withdrawalNotes.trim() === "" ? null : withdrawalNotes.trim(),
           }),
         }
       );
@@ -572,18 +536,11 @@ export default function DLSScreen() {
       const data = await response.json();
 
       if (!response.ok) {
-        Alert.alert(
-          "Error",
-          data.detail || "Failed to update withdrawal"
-        );
+        showAlert("Error", data.detail || "Failed to update withdrawal");
         return;
       }
 
-      Alert.alert(
-        "Success",
-        "Withdrawal updated successfully"
-      );
-
+      showAlert("Success", "Withdrawal updated successfully");
       closeWithdrawalModal();
 
       await Promise.all([
@@ -593,7 +550,7 @@ export default function DLSScreen() {
       ]);
     } catch (err) {
       console.log(err);
-      Alert.alert("Error", "Network error");
+      showAlert("Error", "Network error");
     } finally {
       setLoadingWithdrawal(false);
     }
@@ -613,58 +570,36 @@ export default function DLSScreen() {
   };
 
   const handleDeleteWithdrawal = async (id: string) => {
-    Alert.alert(
-      "Delete Withdrawal",
-      "Are you sure you want to delete this withdrawal?",
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              setLoadingWithdrawal(true);
-  
-              const response = await fetch(
-                `${BACKEND_URL}/api/withdrawals/${id}?user=${user?.name}`,
-                {
-                  method: "DELETE",
-                }
-              );
-  
-              const data = await response.json();
-  
-              if (!response.ok) {
-                Alert.alert(
-                  "Error",
-                  data.detail || "Delete failed"
-                );
-                return;
-              }
-  
-              Alert.alert(
-                "Success",
-                "Withdrawal deleted successfully"
-              );
-  
-              await Promise.all([
-                fetchDLS(),
-                fetchWithdrawals(),
-                fetchDashboardStats(),
-              ]);
-            } catch (err) {
-              console.log(err);
-              Alert.alert("Error", "Network error");
-            } finally {
-              setLoadingWithdrawal(false);
-            }
-          },
-        },
-      ]
-    );
+    if (Platform.OS === 'web') {
+      const confirm = window.confirm("Are you sure you want to delete this withdrawal?");
+      if (confirm) executeDeleteWithdrawal(id);
+    } else {
+      Alert.alert("Delete Withdrawal", "Are you sure you want to delete this withdrawal?", [
+        { text: "Cancel", style: "cancel" },
+        { text: "Delete", style: "destructive", onPress: () => executeDeleteWithdrawal(id) },
+      ]);
+    }
+  };
+
+  const executeDeleteWithdrawal = async (id: string) => {
+    try {
+      setLoadingWithdrawal(true);
+      const response = await fetch(`${BACKEND_URL}/api/withdrawals/${id}?user=${user?.name}`, { method: "DELETE" });
+      const data = await response.json();
+
+      if (!response.ok) {
+        showAlert("Error", data.detail || "Delete failed");
+        return;
+      }
+
+      showAlert("Success", "Withdrawal deleted successfully");
+      await Promise.all([fetchDLS(), fetchWithdrawals(), fetchDashboardStats()]);
+    } catch (err) {
+      console.log(err);
+      showAlert("Error", "Network error");
+    } finally {
+      setLoadingWithdrawal(false);
+    }
   };
 
   const resetForm = () => {
