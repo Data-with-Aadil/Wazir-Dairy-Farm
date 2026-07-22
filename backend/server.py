@@ -328,7 +328,7 @@ async def create_linked_expenditure(withdrawal: Withdrawal):
         category=withdrawal.category,
         subcategory=withdrawal.subcategory,
         notes=withdrawal.notes,
-        created_from=EntrySource.WITHDRAWAL,
+        created_from=EntrySource.WITHDRAWAL.value, # 👈 FIX: Used Enum value
         withdrawal_id=None,
         locked=True,
     )
@@ -343,7 +343,7 @@ async def create_linked_investment(withdrawal: Withdrawal):
         investor="Withdrawal",
         category=withdrawal.category,
         notes=withdrawal.notes,
-        created_from=EntrySource.WITHDRAWAL,
+        created_from=EntrySource.WITHDRAWAL.value, # 👈 FIX: Used Enum value
         withdrawal_id=None,
         locked=True,
     )
@@ -406,20 +406,16 @@ async def update_withdrawal(withdrawal_id: str, withdrawal: Withdrawal):
     old_purpose = existing["purpose"]
     
     withdrawal_dict = withdrawal.dict()
+    withdrawal_dict["purpose"] = withdrawal.purpose.value # 👈 FIX: Save as string, not Enum object
     
-    withdrawal_dict["linked_expenditure_id"] = existing.get(
-        "linked_expenditure_id"
-    )
-    
-    withdrawal_dict["linked_investment_id"] = existing.get(
-        "linked_investment_id"
-    )
+    withdrawal_dict["linked_expenditure_id"] = existing.get("linked_expenditure_id")
+    withdrawal_dict["linked_investment_id"] = existing.get("linked_investment_id")
     
     # ------------------------------------
     # PURPOSE DID NOT CHANGE
     # ------------------------------------
     
-    if old_purpose == withdrawal.purpose:
+    if old_purpose == withdrawal.purpose.value: # 👈 FIX: Compare against .value
     
         if withdrawal.purpose == WithdrawalPurpose.EXPENDITURE:
     
@@ -442,59 +438,28 @@ async def update_withdrawal(withdrawal_id: str, withdrawal: Withdrawal):
     else:
     
         # Soft delete old expenditure
-    
         if existing.get("linked_expenditure_id"):
-    
             await db.expenditures.update_one(
-                {
-                    "_id": ObjectId(
-                        existing["linked_expenditure_id"]
-                    )
-                },
-                {
-                    "$set": {
-                        "deleted": True
-                    }
-                }
+                {"_id": ObjectId(existing["linked_expenditure_id"])},
+                {"$set": {"deleted": True}}
             )
-    
             withdrawal_dict["linked_expenditure_id"] = None
     
         # Soft delete old investment
-    
         if existing.get("linked_investment_id"):
-    
             await db.investments.update_one(
-                {
-                    "_id": ObjectId(
-                        existing["linked_investment_id"]
-                    )
-                },
-                {
-                    "$set": {
-                        "deleted": True
-                    }
-                }
+                {"_id": ObjectId(existing["linked_investment_id"])},
+                {"$set": {"deleted": True}}
             )
-    
             withdrawal_dict["linked_investment_id"] = None
     
         # Create new linked record
-    
         if withdrawal.purpose == WithdrawalPurpose.EXPENDITURE:
-    
-            new_id = await create_linked_expenditure(
-                withdrawal
-            )
-    
+            new_id = await create_linked_expenditure(withdrawal)
             withdrawal_dict["linked_expenditure_id"] = new_id
     
         elif withdrawal.purpose == WithdrawalPurpose.INVESTMENT:
-    
-            new_id = await create_linked_investment(
-                withdrawal
-            )
-    
+            new_id = await create_linked_investment(withdrawal)
             withdrawal_dict["linked_investment_id"] = new_id
 
     # ----------------------------------------
@@ -502,12 +467,8 @@ async def update_withdrawal(withdrawal_id: str, withdrawal: Withdrawal):
     # ----------------------------------------
 
     await db.withdrawals.update_one(
-        {
-            "_id": ObjectId(withdrawal_id)
-        },
-        {
-            "$set": withdrawal_dict
-        }
+        {"_id": ObjectId(withdrawal_id)},
+        {"$set": withdrawal_dict}
     )
 
     # ----------------------------------------
@@ -515,33 +476,15 @@ async def update_withdrawal(withdrawal_id: str, withdrawal: Withdrawal):
     # ----------------------------------------
 
     if withdrawal_dict["linked_expenditure_id"]:
-
         await db.expenditures.update_one(
-            {
-                "_id": ObjectId(
-                    withdrawal_dict["linked_expenditure_id"]
-                )
-            },
-            {
-                "$set": {
-                    "withdrawal_id": withdrawal_id
-                }
-            }
+            {"_id": ObjectId(withdrawal_dict["linked_expenditure_id"])},
+            {"$set": {"withdrawal_id": withdrawal_id}}
         )
 
     if withdrawal_dict["linked_investment_id"]:
-
         await db.investments.update_one(
-            {
-                "_id": ObjectId(
-                    withdrawal_dict["linked_investment_id"]
-                )
-            },
-            {
-                "$set": {
-                    "withdrawal_id": withdrawal_id
-                }
-            }
+            {"_id": ObjectId(withdrawal_dict["linked_investment_id"])},
+            {"$set": {"withdrawal_id": withdrawal_id}}
         )
 
     # ----------------------------------------
@@ -566,9 +509,7 @@ async def update_withdrawal(withdrawal_id: str, withdrawal: Withdrawal):
         }
     )
 
-    return {
-        "success": True
-    }
+    return {"success": True}
 
 @api_router.delete("/withdrawals/{withdrawal_id}")
 async def delete_withdrawal(withdrawal_id: str, user: str):
@@ -583,89 +524,42 @@ async def delete_withdrawal(withdrawal_id: str, user: str):
             detail="Withdrawal not found"
         )
 
-    # ----------------------------------------
     # Soft delete linked Expenditure
-    # ----------------------------------------
-
     if withdrawal.get("linked_expenditure_id"):
-
         await db.expenditures.update_one(
-            {
-                "_id": ObjectId(
-                    withdrawal["linked_expenditure_id"]
-                )
-            },
-            {
-                "$set": {
-                    "deleted": True
-                }
-            }
+            {"_id": ObjectId(withdrawal["linked_expenditure_id"])},
+            {"$set": {"deleted": True}}
         )
 
-    # ----------------------------------------
     # Soft delete linked Investment
-    # ----------------------------------------
-
     if withdrawal.get("linked_investment_id"):
-
         await db.investments.update_one(
-            {
-                "_id": ObjectId(
-                    withdrawal["linked_investment_id"]
-                )
-            },
-            {
-                "$set": {
-                    "deleted": True
-                }
-            }
+            {"_id": ObjectId(withdrawal["linked_investment_id"])},
+            {"$set": {"deleted": True}}
         )
 
-    # ----------------------------------------
     # Soft delete Withdrawal
-    # ----------------------------------------
-
     await db.withdrawals.update_one(
-        {
-            "_id": ObjectId(withdrawal_id)
-        },
-        {
-            "$set": {
-                "deleted": True
-            }
-        }
+        {"_id": ObjectId(withdrawal_id)},
+        {"$set": {"deleted": True}}
     )
-
-    # ----------------------------------------
-    # Notification
-    # ----------------------------------------
 
     notif = Notification(
         type="deletion",
-        data={
-            "type": "withdrawal",
-            "id": withdrawal_id
-        },
+        data={"type": "withdrawal", "id": withdrawal_id},
         message=f"{user} removed DLS Withdrawal of ₹{withdrawal['amount']:,.0f}"
     )
 
-    await db.notifications.insert_one(
-        notif.dict()
-    )
+    await db.notifications.insert_one(notif.dict())
 
     await send_push_notification(
         user,
         "Withdrawal Deleted",
         f"{user} removed DLS Withdrawal of ₹{withdrawal['amount']:,.0f}",
-        {
-            "screen": "/(tabs)/wrx",
-            "type": "withdrawal"
-        }
+        {"screen": "/(tabs)/wrx", "type": "withdrawal"}
     )
 
-    return {
-        "success": True
-    }
+    return {"success": True}
 
 async def update_linked_expenditure(
     expenditure_id: str,
@@ -1116,6 +1010,7 @@ async def create_withdrawal(withdrawal: Withdrawal):
         )
 
     withdrawal_dict = withdrawal.dict()
+    withdrawal_dict["purpose"] = withdrawal.purpose.value # 👈 FIX: Save Enum as pure string
 
     withdrawal_dict["linked_expenditure_id"] = None
     withdrawal_dict["linked_investment_id"] = None
